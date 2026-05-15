@@ -1,0 +1,103 @@
+{
+  "name": "reviewstack",
+  "displayName": "ReviewStack",
+  "description": "AI-powered repository-aware code review and architecture assistant for VS Code. ",
+  "version": "0.0.1",
+  "engines": {
+    "vscode": "^1.119.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "secondarySidebar": [
+        {
+          "id": "mySecondaryContainer",
+          "title": "My Secondary Panel",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "mySecondaryContainer": [
+        {
+          "id": "mySecondaryView",
+          "name": "Secondary Panel",
+          "type": "webview",
+          "icon": "media/icon.svg"
+        }
+        ]
+      },
+    "commands": [
+      {
+        "command": "myChat.open",
+        "title": "Review Chat",
+        "icon": {
+          "dark": "media/icon.svg",
+          "light": "media/icon.svg"
+        }
+      },
+      {
+        "command": "reviewstack.reviewFunction",
+        "title": "ReviewStack: Review"
+      },
+      {
+        "command": "reviewstack.dismissLens",
+        "title": "ReviewStack: Dismiss"
+      }
+    ],
+    "menus": {
+      "editor/title": [
+        {
+          "command": "myChat.open",
+          "group": "navigation"
+        }
+      ],
+      "view/title": [],
+      "commandPalette": [
+        {
+          "command": "myChat.open"
+        },
+        {
+          "command": "reviewstack.reviewFunction",
+          "when": "false"
+        },
+        {
+          "command": "reviewstack.dismissLens",
+          "when": "false"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run package",
+    "compile": "npm run check-types && npm run lint && node esbuild.js",
+    "watch": "npm-run-all -p watch:*",
+    "watch:esbuild": "node esbuild.js --watch",
+    "watch:tsc": "tsc --noEmit --watch --project tsconfig.json",
+    "package": "npm run check-types && npm run lint && node esbuild.js --production",
+    "compile-tests": "tsc -p . --outDir out",
+    "watch-tests": "tsc -p . -w --outDir out",
+    "pretest": "npm run compile-tests && npm run compile && npm run lint",
+    "check-types": "tsc --noEmit",
+    "lint": "eslint src",
+    "test": "vscode-test"
+  },
+  "devDependencies": {
+    "@types/mocha": "^10.0.10",
+    "@types/node": "^22.19.18",
+    "@types/vscode": "^1.118.0",
+    "@vscode/test-cli": "^0.0.12",
+    "@vscode/test-electron": "^2.5.2",
+    "esbuild": "^0.27.3",
+    "eslint": "^9.39.3",
+    "npm-run-all": "^4.1.5",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.56.1"
+  }
+}
