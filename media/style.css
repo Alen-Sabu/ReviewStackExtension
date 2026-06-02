@@ -195,3 +195,14 @@ body {
 }
 
 #send:hover { background: var(--vscode-button-hoverBackground); }
+
+.messages-container { height: 320px; overflow:auto; padding:8px; border-radius:6px; background:#0b1220; }
+.messages { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:8px; }
+.msg { display:flex; align-items:flex-start; gap:8px; max-width:100%; }
+.msg.bot { justify-content:flex-start; }
+.msg.user { justify-content:flex-end; }
+.bubble { padding:10px 12px; border-radius:10px; white-space:pre-wrap; word-break:break-word; }
+.msg.bot .bubble { background:#111827; color:#e5e7eb; border-bottom-left-radius:4px; }
+.msg.user .bubble { background:#0b5cff; color:white; border-bottom-right-radius:4px; }
+.code-block { background:#071223; padding:8px; border-radius:6px; font-family:monospace; font-size:12px; overflow:auto; }
+.copy-btn { background:transparent; border:none; color:#9ca3af; cursor:pointer; margin-left:8px; }

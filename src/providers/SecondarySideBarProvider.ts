@@ -89,7 +89,7 @@ export class SecondarySidebarProvider implements vscode.WebviewViewProvider {
         if (!currentReview) {
           webviewView.webview.postMessage({
             type: "botReply",
-            text: "Click 👁 Review on a function first to start a review.",
+            text: "Click Review on a function first to start a review.",
           });
           return;
         }
@@ -225,8 +225,8 @@ export class SecondarySidebarProvider implements vscode.WebviewViewProvider {
   <meta charset="UTF-8">
   <meta http-equiv="Content-Security-Policy"
     content="default-src 'none';
-             style-src ${webview.cspSource} 'unsafe-inline';
-             script-src 'nonce-${nonce}';">
+    style-src ${webview.cspSource} 'unsafe-inline';
+    script-src 'nonce-${nonce}';">
   <link href="${styleUri}" rel="stylesheet">
 </head>
 <body>
@@ -243,8 +243,8 @@ export class SecondarySidebarProvider implements vscode.WebviewViewProvider {
     <div id="reviewContent"></div>
   </div>
 
-  <div id="messages">
-    <div class="msg bot">👋 Click 👁 Review above any function to start.</div>
+  <div id="messagesContainer" class="messages-container" role="log" aria-live="polite">
+    <ul id="messages" class="messages"></ul>
   </div>
 
   <div id="inputRow">
@@ -264,19 +264,106 @@ export class SecondarySidebarProvider implements vscode.WebviewViewProvider {
     // signal host that webview is ready to receive messages
     vscode.postMessage({ type: 'webviewReady' });
 
+    function formatTime() {
+      const d = new Date();
+      return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }
+
+    function renderMessageContent(text) {
+      const frag = document.createDocumentFragment();
+      const codeRe = /\`\`\`([\s\S]*?)\`\`\`/g;
+      let last = 0;
+      let match;
+
+      while ((match = codeRe.exec(text)) !== null) {
+        const before = text.slice(last, match.index);
+        if (before) {
+          frag.appendChild(document.createTextNode(before));
+        }
+
+        const pre = document.createElement('pre');
+        pre.className = 'code-block';
+
+        const code = document.createElement('code');
+        code.textContent = match[1].trim();
+
+        pre.appendChild(code);
+        frag.appendChild(pre);
+
+        last = match.index + match[0].length;
+      }
+
+      if (last < text.length) {
+        frag.appendChild(document.createTextNode(text.slice(last)));
+      }
+
+      return frag;
+    }
+
     function addMessage(text, role) {
-      const div = document.createElement('div');
-      div.className = 'msg ' + role;
-      div.innerText = text;
-      messages.appendChild(div);
-      messages.scrollTop = messages.scrollHeight;
+      const list = document.getElementById('messages');
+      const li = document.createElement('li');
+      li.className = 'msg ' + role;
+
+      const meta = document.createElement('div');
+      meta.className = 'meta';
+
+      const avatar = document.createElement('div');
+      avatar.textContent = role === 'user' ? '👤' : '⚇';
+
+      const time = document.createElement('div');
+      time.className = 'time';
+      time.textContent = formatTime();
+
+      meta.appendChild(avatar);
+      meta.appendChild(time);
+
+      const bubble = document.createElement('div');
+      bubble.className = 'bubble';
+      bubble.appendChild(renderMessageContent(text));
+
+      const copyBtn = document.createElement('button');
+      copyBtn.className = 'copy-btn';
+      copyBtn.type = 'button';
+      copyBtn.textContent = 'Copy';
+      copyBtn.addEventListener('click', async () => {
+        try {
+          await navigator.clipboard.writeText(text);
+          copyBtn.textContent = 'Copied';
+        } catch (error) {
+          copyBtn.textContent = 'Error';
+        }
+
+        setTimeout(() => {
+          copyBtn.textContent = 'Copy';
+        }, 1000);
+      });
+
+      const content = document.createElement('div');
+      content.style.display = 'flex';
+      content.style.alignItems = 'center';
+      content.style.gap = '8px';
+      content.appendChild(bubble);
+      content.appendChild(copyBtn);
+
+      if (role === 'user') {
+        li.appendChild(content);
+        li.appendChild(meta);
+      } else {
+        li.appendChild(meta);
+        li.appendChild(content);
+      }
+
+      list.appendChild(li);
+      const container = document.getElementById('messagesContainer');
+      container.scrollTop = container.scrollHeight;
     }
 
     function showLoading() {
       if (loadingEl) return;
       loadingEl = document.createElement('div');
       loadingEl.className = 'loading';
-      loadingEl.innerText = '⏳ Reviewing...';
+      loadingEl.innerText = 'Reviewing...';
       messages.appendChild(loadingEl);
       messages.scrollTop = messages.scrollHeight;
     }
@@ -305,7 +392,7 @@ export class SecondarySidebarProvider implements vscode.WebviewViewProvider {
       const filePathEl  = document.getElementById('filePath');
       const langBadgeEl = document.getElementById('langBadge');
 
-      filePathEl.textContent  = '📄 ' + (filePath.split('/').pop() || filePath.split('\\\\').pop() || filePath);
+      filePathEl.textContent  = (filePath.split('/').pop() || filePath.split('\\\\').pop() || filePath);
       langBadgeEl.textContent = language;
       fileInfoEl.style.display = 'flex';
 
