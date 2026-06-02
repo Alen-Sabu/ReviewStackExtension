@@ -14,7 +14,15 @@ For example if there is an image subfolder under your extension project workspac
 
 ## Requirements
 
-If you have any requirements or dependencies, add a section describing those and how to install and configure them.
+ReviewStack now uses a local Ollama model instead of Anthropic, so reviews run without a paid API key.
+
+Install Ollama, pull a model, and then start the backend. You can override the defaults with:
+
+* `OLLAMA_BASE_URL` - defaults to `http://127.0.0.1:11434`
+* `OLLAMA_MODEL` - defaults to `qwen2.5-coder:7b`
+* `OLLAMA_TIMEOUT_SECONDS` - defaults to `300`
+
+The Python backend dependencies live in [reviewstack_backend/requirements.txt](reviewstack_backend/requirements.txt).
 
 ## Extension Settings
 

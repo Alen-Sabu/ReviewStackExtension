@@ -1,18 +1,46 @@
 import * as vscode from "vscode";
+import { reviewFunction } from "../utils/api";
+import { StatusBarManager } from "../managers/StatusBarManager";
+import { DecorationManager } from "../managers/DecorationManager";
+
+let conversation: { role: string; content: string }[] = [];
+let currentReview: {
+  filePath: string;
+  functionCode: string;
+  language: string;
+} | null = null;
 
 export class SecondarySidebarProvider implements vscode.WebviewViewProvider {
   _view?: vscode.WebviewView;
+  private _webviewReady = false;
+  private _pendingMessages: any[] = [];
 
-  constructor(private readonly _extensionUri: vscode.Uri) {}
+  constructor(
+    private readonly _extensionUri: vscode.Uri,
+    private readonly _repoPath: string,
+    private readonly _statusBar: StatusBarManager,
+    private readonly _decorationManager: DecorationManager,
+  ) {}
 
-  // Typed getter to expose visibility state safely
   public get isVisible(): boolean {
     return !!this._view?.visible;
   }
 
-  // Public method to send messages to the webview safely
   public sendMessage(message: any): void {
-    if (this._view) {
+    if (!this._view || !this._webviewReady) {
+      this._pendingMessages.push(message);
+      return;
+    }
+    this._view.webview.postMessage(message);
+  }
+
+  private _flushPendingMessages() {
+    if (!this._view || !this._webviewReady || !this._pendingMessages.length) {
+      return;
+    }
+    const messages = [...this._pendingMessages];
+    this._pendingMessages = [];
+    for (const message of messages) {
       this._view.webview.postMessage(message);
     }
   }
@@ -20,290 +48,351 @@ export class SecondarySidebarProvider implements vscode.WebviewViewProvider {
   resolveWebviewView(webviewView: vscode.WebviewView) {
     this._view = webviewView;
 
-    // keep VS Code context in sync so other commands or UI can know visibility
     const updateContext = () => {
-      const visible = !!this._view?.visible;
       vscode.commands.executeCommand(
         "setContext",
         "reviewstack.sidebarVisible",
-        visible,
+        !!this._view?.visible,
       );
     };
-    // initial context
+
     updateContext();
-    // update when visibility changes
+
     webviewView.onDidChangeVisibility(() => {
       this._view = webviewView;
       updateContext();
+      if (this._view?.visible) {
+        setTimeout(() => this._flushPendingMessages(), 50);
+      }
     });
 
-    webviewView.webview.options = { enableScripts: true };
-    webviewView.webview.html = this._getHtml();
+    webviewView.webview.options = {
+      enableScripts: true,
+      localResourceRoots: [
+        vscode.Uri.joinPath(this._extensionUri, "media"), // dev (F5)
+        vscode.Uri.joinPath(this._extensionUri, "dist", "media"), // production
+      ],
+    };
+
+    webviewView.webview.html = this._getHtml(webviewView.webview);
 
     webviewView.webview.onDidReceiveMessage(async (data) => {
+      // ── webview signals it is ready ──────────────────────────────────
+      if (data.type === "webviewReady") {
+        this._webviewReady = true;
+        this._flushPendingMessages();
+        return;
+      }
+
+      // ── user typed a follow-up ───────────────────────────────────────
       if (data.type === "userMessage") {
-        // Call your AI API here and send response back
-        const reply = await getAIResponse(data.text);
-        webviewView.webview.postMessage({ type: "botReply", text: reply });
+        if (!currentReview) {
+          webviewView.webview.postMessage({
+            type: "botReply",
+            text: "Click 👁 Review on a function first to start a review.",
+          });
+          return;
+        }
+
+        try {
+          webviewView.webview.postMessage({ type: "loading", value: true });
+
+          const result = await reviewFunction({
+            repo_path: this._repoPath,
+            file_path: currentReview.filePath,
+            function_code: currentReview.functionCode,
+            language: currentReview.language,
+            conversation,
+            user_reply: data.text,
+          });
+
+          conversation.push({ role: "user", content: data.text });
+          conversation.push({ role: "assistant", content: result.message });
+
+          webviewView.webview.postMessage({ type: "loading", value: false });
+          webviewView.webview.postMessage({
+            type: "botReply",
+            text: result.message,
+          });
+          this._statusBar.setReady();
+        } catch (e: any) {
+          webviewView.webview.postMessage({ type: "loading", value: false });
+          webviewView.webview.postMessage({
+            type: "botReply",
+            text: `❌ Error: ${e.message}`,
+          });
+          this._statusBar.setError(e.message);
+        }
+      }
+
+      // ── CodeLens Review button clicked ───────────────────────────────
+      if (data.type === "startReview") {
+        conversation = [];
+        currentReview = {
+          filePath: data.payload.filePath,
+          functionCode: data.payload.code,
+          language: data.payload.language,
+        };
+
+        // clear old decoration
+        const prevEditor = vscode.window.visibleTextEditors.find(
+          (e) => e.document.uri.fsPath === currentReview!.filePath,
+        );
+        if (prevEditor) {
+          this._decorationManager.clear(prevEditor);
+        }
+
+        try {
+          webviewView.webview.postMessage({ type: "loading", value: true });
+
+          const result = await reviewFunction({
+            repo_path: this._repoPath,
+            file_path: currentReview.filePath,
+            function_code: currentReview.functionCode,
+            language: currentReview.language,
+            conversation: [],
+          });
+
+          conversation.push({ role: "assistant", content: result.message });
+
+          webviewView.webview.postMessage({ type: "loading", value: false });
+          webviewView.webview.postMessage({
+            type: "botReply",
+            text: result.message,
+          });
+          this._statusBar.setReady();
+
+          // ── apply decoration ─────────────────────────────────────────
+          const hasIssues =
+            result.message.includes("⚠️") ||
+            result.message.toLowerCase().includes("issue") ||
+            result.message.toLowerCase().includes("problem") ||
+            result.message.toLowerCase().includes("fix");
+
+          const reviewedEditor = vscode.window.visibleTextEditors.find(
+            (e) => e.document.uri.fsPath === currentReview!.filePath,
+          );
+
+          if (reviewedEditor) {
+            const docLines = reviewedEditor.document.getText().split("\n");
+            const fnFirstLine = currentReview!.functionCode
+              .split("\n")[0]
+              .trim();
+            const startLine = docLines.findIndex(
+              (l) => l.trim() === fnFirstLine,
+            );
+            const endLine =
+              startLine !== -1
+                ? startLine + currentReview!.functionCode.split("\n").length - 1
+                : -1;
+
+            if (startLine !== -1) {
+              hasIssues
+                ? this._decorationManager.markHasIssues(
+                    reviewedEditor,
+                    startLine,
+                    endLine,
+                  )
+                : this._decorationManager.markClean(
+                    reviewedEditor,
+                    startLine,
+                    endLine,
+                  );
+            }
+          }
+        } catch (e: any) {
+          webviewView.webview.postMessage({ type: "loading", value: false });
+          webviewView.webview.postMessage({
+            type: "botReply",
+            text: `❌ ${e.message}`,
+          });
+          this._statusBar.setError(e.message);
+        }
       }
     });
   }
 
-  private _getHtml() {
+  private _getHtml(webview: vscode.Webview): string {
+    const styleUri = webview.asWebviewUri(
+      vscode.Uri.joinPath(this._extensionUri, "media", "style.css"),
+    );
+
+    const nonce = getNonce();
+
     return `<!DOCTYPE html>
-  <html>
-  <head>
-    <style>
-      * { box-sizing: border-box; margin: 0; padding: 0; }
-      body {
-        display: flex;
-        flex-direction: column;
-        height: 100vh;
-        font-family: var(--vscode-font-family);
-        background: var(--vscode-sideBar-background);
-        color: var(--vscode-foreground);
-      }
-      
-      #reviewSection {
-        background: var(--vscode-editorGroupHeader-tabsBackground);
-        border-bottom: 1px solid var(--vscode-panel-border);
-        padding: 12px;
-        min-height: 60px;
-      }
-      
-      .review-header {
-        font-size: 12px;
-        font-weight: bold;
-        color: var(--vscode-foreground);
-        margin-bottom: 8px;
-      }
-      
-      .review-item {
-        background: var(--vscode-input-background);
-        border: 1px solid var(--vscode-input-border);
-        border-radius: 4px;
-        padding: 8px;
-        margin-bottom: 8px;
-      }
-      
-      .function-chip {
-        display: inline-flex;
-        align-items: center;
-        background: var(--vscode-button-background);
-        color: var(--vscode-button-foreground);
-        padding: 4px 8px;
-        border-radius: 12px;
-        font-size: 11px;
-        font-weight: 500;
-        cursor: pointer;
-        transition: background-color 0.2s;
-      }
-      
-      .function-chip:hover {
-        background: var(--vscode-button-hoverBackground);
-      }
-      
-      .code-display {
-        background: var(--vscode-editor-background);
-        border: 1px solid var(--vscode-input-border);
-        border-radius: 4px;
-        padding: 8px;
-        font-family: var(--vscode-editor-font-family);
-        font-size: 11px;
-        overflow-x: auto;
-        white-space: pre-wrap;
-        word-wrap: break-word;
-        margin-top: 8px;
-      }
-      
-      .code-display .line-number {
-        color: var(--vscode-lineNumber-foreground);
-        margin-right: 8px;
-      }
-      
-      .file-info {
-        font-size: 11px;
-        color: var(--vscode-descriptionForeground);
-        margin-bottom: 6px;
-      }
-      
-      #messages {
-        flex: 1;
-        overflow-y: auto;
-        padding: 12px;
-        display: flex;
-        flex-direction: column;
-        gap: 8px;
-      }
-      
-      .msg {
-        padding: 8px 12px;
-        border-radius: 8px;
-        max-width: 85%;
-        font-size: 13px;
-        line-height: 1.5;
-      }
-      
-      .user {
-        background: var(--vscode-button-background);
-        color: var(--vscode-button-foreground);
-        align-self: flex-end;
-      }
-      
-      .bot {
-        background: var(--vscode-input-background);
-        align-self: flex-start;
-      }
-      
-      #inputRow {
-        display: flex;
-        padding: 8px;
-        gap: 6px;
-        border-top: 1px solid var(--vscode-panel-border);
-      }
-      
-      #input {
-        flex: 1;
-        padding: 6px 10px;
-        background: var(--vscode-input-background);
-        color: var(--vscode-input-foreground);
-        border: 1px solid var(--vscode-input-border);
-        border-radius: 4px;
-        font-family: var(--vscode-font-family);
-        font-size: 13px;
-        resize: none;
-      }
-      
-      #send {
-        padding: 6px 12px;
-        background: var(--vscode-button-background);
-        color: var(--vscode-button-foreground);
-        border: none;
-        border-radius: 4px;
-        cursor: pointer;
-        font-size: 13px;
-      }
-      
-      #send:hover { background: var(--vscode-button-hoverBackground); }
-    </style>
-  </head>
-  <body>
-    <div id="reviewSection">
-      <div class="review-header">📋 Review Stack</div>
-      <div id="reviewContent"></div>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy"
+    content="default-src 'none';
+             style-src ${webview.cspSource} 'unsafe-inline';
+             script-src 'nonce-${nonce}';">
+  <link href="${styleUri}" rel="stylesheet">
+</head>
+<body>
+  <div id="reviewSection">
+    <div class="review-title-row">
+      <span class="status-dot" id="statusDot"></span>
+      <span class="review-title">ReviewStack</span>
+      <span class="review-state" id="reviewState">Ready</span>
     </div>
-    
-    <div id="messages">
-      <div class="msg bot">👋 Hi! How can I help you?</div>
+    <div id="fileInfo" style="display:none">
+      <span class="file-path" id="filePath"></span>
+      <span class="lang-badge" id="langBadge"></span>
     </div>
+    <div id="reviewContent"></div>
+  </div>
 
-    <div id="inputRow">
-      <textarea id="input" rows="2" placeholder="Ask anything..."></textarea>
-      <button id="send">Send</button>
-    </div>
+  <div id="messages">
+    <div class="msg bot">👋 Click 👁 Review above any function to start.</div>
+  </div>
 
-    <script>
-      const vscode = acquireVsCodeApi();
-      const messages = document.getElementById('messages');
-      const input = document.getElementById('input');
-      const send = document.getElementById('send');
-      const reviewContent = document.getElementById('reviewContent');
-      const LINE_THRESHOLD = 10; // If more than this, show chip; otherwise show full code
+  <div id="inputRow">
+    <textarea id="input" rows="2" placeholder="Ask a follow-up..."></textarea>
+    <button id="send">Send</button>
+  </div>
 
-      function addMessage(text, role) {
-        const div = document.createElement('div');
-        div.className = 'msg ' + role;
-        div.innerText = text;
-        messages.appendChild(div);
-        messages.scrollTop = messages.scrollHeight;
+  <script nonce="${nonce}">
+    const vscode = acquireVsCodeApi();
+    const messages = document.getElementById('messages');
+    const input = document.getElementById('input');
+    const send = document.getElementById('send');
+    const reviewContent = document.getElementById('reviewContent');
+    const LINE_THRESHOLD = 10;
+    let loadingEl = null;
+
+    // signal host that webview is ready to receive messages
+    vscode.postMessage({ type: 'webviewReady' });
+
+    function addMessage(text, role) {
+      const div = document.createElement('div');
+      div.className = 'msg ' + role;
+      div.innerText = text;
+      messages.appendChild(div);
+      messages.scrollTop = messages.scrollHeight;
+    }
+
+    function showLoading() {
+      if (loadingEl) return;
+      loadingEl = document.createElement('div');
+      loadingEl.className = 'loading';
+      loadingEl.innerText = '⏳ Reviewing...';
+      messages.appendChild(loadingEl);
+      messages.scrollTop = messages.scrollHeight;
+    }
+
+    function hideLoading() {
+      if (loadingEl) { loadingEl.remove(); loadingEl = null; }
+    }
+
+    function setStatus(state) {
+      const dot = document.getElementById('statusDot');
+      const label = document.getElementById('reviewState');
+      dot.className = 'status-dot ' + state;
+      const labels = {
+        ready: 'Ready',
+        indexing: 'Indexing...',
+        reviewing: 'Reviewing...',
+        error: 'Error',
+      };
+      label.textContent = labels[state] || 'Ready';
+    }
+
+    function displayReviewFunction(payload) {
+      const { code, filePath, language } = payload;
+
+      const fileInfoEl  = document.getElementById('fileInfo');
+      const filePathEl  = document.getElementById('filePath');
+      const langBadgeEl = document.getElementById('langBadge');
+
+      filePathEl.textContent  = '📄 ' + (filePath.split('/').pop() || filePath.split('\\\\').pop() || filePath);
+      langBadgeEl.textContent = language;
+      fileInfoEl.style.display = 'flex';
+
+      const lines = code.split('\\n');
+      const reviewItem = document.createElement('div');
+      reviewItem.className = 'review-item';
+
+      if (lines.length > LINE_THRESHOLD) {
+        const chip = document.createElement('div');
+        chip.className = 'function-chip';
+        chip.textContent = 'Lines 1–' + lines.length + ' (' + language + ') ▶';
+        let expanded = false;
+        chip.addEventListener('click', () => {
+          if (!expanded) {
+            const cd = document.createElement('div');
+            cd.className = 'code-display';
+            cd.textContent = code;
+            reviewItem.appendChild(cd);
+            chip.textContent = 'Lines 1–' + lines.length + ' (' + language + ') ▼';
+            expanded = true;
+          } else {
+            reviewItem.querySelector('.code-display')?.remove();
+            chip.textContent = 'Lines 1–' + lines.length + ' (' + language + ') ▶';
+            expanded = false;
+          }
+        });
+        reviewItem.appendChild(chip);
+      } else {
+        const cd = document.createElement('div');
+        cd.className = 'code-display';
+        cd.textContent = code;
+        reviewItem.appendChild(cd);
       }
 
-      function displayReviewFunction(payload) {
-        const { code, filePath, language } = payload;
-        const lines = code.split('\\n');
-        const lineCount = lines.length;
-        const fileName = filePath.split('/').pop() || filePath;
+      reviewContent.innerHTML = '';
+      reviewContent.appendChild(reviewItem);
+    }
 
-        const reviewItem = document.createElement('div');
-        reviewItem.className = 'review-item';
+    send.addEventListener('click', () => {
+      const text = input.value.trim();
+      if (!text) return;
+      addMessage(text, 'user');
+      input.value = '';
+      vscode.postMessage({ type: 'userMessage', text });
+    });
 
-        const fileInfo = document.createElement('div');
-        fileInfo.className = 'file-info';
-        fileInfo.textContent = \`📄 \${fileName}\`;
-        reviewItem.appendChild(fileInfo);
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        send.click();
+      }
+    });
 
-        if (lineCount > LINE_THRESHOLD) {
-          // Show as chip with line numbers
-          const chip = document.createElement('div');
-          chip.className = 'function-chip';
-          chip.textContent = \`Lines: 1–\${lineCount} (\${language})\`;
-          chip.title = 'Click to expand function code';
-          chip.style.cursor = 'pointer';
+    window.addEventListener('message', (event) => {
+      const { type, text, payload, value } = event.data;
 
-          let expanded = false;
-          chip.addEventListener('click', () => {
-            if (!expanded) {
-              const codeDisplay = document.createElement('div');
-              codeDisplay.className = 'code-display';
-              codeDisplay.textContent = code;
-              reviewItem.appendChild(codeDisplay);
-              expanded = true;
-              chip.textContent = \`▼ Lines: 1–\${lineCount} (\${language})\`;
-            } else {
-              const codeDisplay = reviewItem.querySelector('.code-display');
-              if (codeDisplay) codeDisplay.remove();
-              expanded = false;
-              chip.textContent = \`Lines: 1–\${lineCount} (\${language})\`;
-            }
-          });
-
-          reviewItem.appendChild(chip);
-        } else {
-          // Show full code directly
-          const codeDisplay = document.createElement('div');
-          codeDisplay.className = 'code-display';
-          codeDisplay.textContent = code;
-          reviewItem.appendChild(codeDisplay);
-        }
-
-        reviewContent.innerHTML = '';
-        reviewContent.appendChild(reviewItem);
+      if (type === 'loading') {
+        value ? showLoading() : hideLoading();
+        setStatus(value ? 'reviewing' : 'ready');
       }
 
-      send.addEventListener('click', () => {
-        const text = input.value.trim();
-        if (!text) return;
-        addMessage(text, 'user');
-        input.value = '';
-        vscode.postMessage({ type: 'userMessage', text });
-      });
+      if (type === 'botReply') {
+        hideLoading();
+        setStatus('ready');
+        addMessage(text, 'bot');
+      }
 
-      input.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' && !e.shiftKey) {
-          e.preventDefault();
-          send.click();
-        }
-      });
-
-      window.addEventListener('message', (event) => {
-        const { type, text, payload } = event.data;
-
-        if (type === 'botReply') {
-          addMessage(text, 'bot');
-        }
-
-        if (type === 'reviewFunction') {
-          displayReviewFunction(payload);
-          addMessage(\`📌 Function from \${payload.filePath.split('/').pop()} added to review\`, 'bot');
-        }
-      });
-    <\/script>
-  </body>
-  </html>`;
+      if (type === 'reviewFunction') {
+        messages.innerHTML = '';
+        displayReviewFunction(payload);
+        setStatus('reviewing');
+        showLoading();
+        vscode.postMessage({ type: 'startReview', payload });
+      }
+    });
+  <\/script>
+</body>
+</html>`;
   }
 }
 
-// Placeholder — replace with real Claude/OpenAI API call
-async function getAIResponse(text: string): Promise<string> {
-  return `You said: "${text}" — wire up your AI API here!`;
+function getNonce(): string {
+  let text = "";
+  const possible =
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+  for (let i = 0; i < 32; i++) {
+    text += possible.charAt(Math.floor(Math.random() * possible.length));
+  }
+  return text;
 }

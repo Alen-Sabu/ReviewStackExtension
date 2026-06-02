@@ -2,9 +2,37 @@ import * as vscode from "vscode";
 import { SecondarySidebarProvider } from "./providers/SecondarySideBarProvider";
 import { ReviewCodeLensProvider } from "./providers/CodeLensProvider";
 import { extractFunctionAt } from "./utils/extractFunction";
+import { indexRepo } from "./utils/api";
+import { StatusBarManager } from "./managers/StatusBarManager";
+import { DecorationManager } from "./managers/DecorationManager";
 
 export function activate(context: vscode.ExtensionContext) {
-  const chatProvider = new SecondarySidebarProvider(context.extensionUri);
+  // status bar
+  const statusBar = new StatusBarManager();
+  const decorationManager = new DecorationManager();
+
+  context.subscriptions.push(statusBar);
+  context.subscriptions.push(decorationManager);
+
+  // Index the repo on activation
+  const folders = vscode.workspace.workspaceFolders;
+  const repoPath = folders?.[0]?.uri?.fsPath ?? "";
+
+  if (repoPath) {
+    statusBar.setIndexing();
+    indexRepo(repoPath)
+      .then((fileCount) => statusBar.setReady(fileCount))
+      .catch((e) =>
+        statusBar.setError(e instanceof Error ? e.message : String(e)),
+      );
+  }
+
+  const chatProvider = new SecondarySidebarProvider(
+    context.extensionUri,
+    repoPath,
+    statusBar,
+    decorationManager,
+  );
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider("mySecondaryView", chatProvider),
   );
@@ -60,6 +88,19 @@ export function activate(context: vscode.ExtensionContext) {
     }),
   );
 
+  // Re-index if user saves any file
+  context.subscriptions.push(
+    vscode.workspace.onDidSaveTextDocument(() => {
+      if (repoPath){
+        indexRepo(repoPath)
+          .then((fileCount) => statusBar.setReady(fileCount))
+          .catch((e) =>
+            statusBar.setError(e instanceof Error ? e.message : String(e)),
+          );
+      } 
+    }),
+  );
+
   // review function command
   context.subscriptions.push(
     vscode.commands.registerCommand(
@@ -79,6 +120,8 @@ export function activate(context: vscode.ExtensionContext) {
             "workbench.action.focusAuxiliaryBar",
           );
         }
+
+        statusBar.setReviewing();
 
         // send function to sidebar
         chatProvider.sendMessage({
