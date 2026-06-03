@@ -1,6 +1,6 @@
 import * as fs from "fs";
 import * as vscode from "vscode";
-import { reviewFunction } from "../utils/api";
+import { reviewFunction, type ReviewResponse } from "../utils/api";
 import { StatusBarManager } from "../managers/StatusBarManager";
 import { DecorationManager } from "../managers/DecorationManager";
 
@@ -108,11 +108,7 @@ export class SecondarySidebarProvider implements vscode.WebviewViewProvider {
           conversation.push({ role: "user", content: data.text });
           conversation.push({ role: "assistant", content: result.message });
 
-          webviewView.webview.postMessage({ type: "loading", value: false });
-          webviewView.webview.postMessage({
-            type: "botReply",
-            text: result.message,
-          });
+          this._postReviewMessages(webviewView.webview, result);
           this._statusBar.setReady();
         } catch (e: unknown) {
           const message = e instanceof Error ? e.message : String(e);
@@ -153,11 +149,7 @@ export class SecondarySidebarProvider implements vscode.WebviewViewProvider {
 
           conversation.push({ role: "assistant", content: result.message });
 
-          webviewView.webview.postMessage({ type: "loading", value: false });
-          webviewView.webview.postMessage({
-            type: "botReply",
-            text: result.message,
-          });
+          this._postReviewMessages(webviewView.webview, result);
           this._statusBar.setReady();
 
           const hasIssues =
@@ -208,6 +200,26 @@ export class SecondarySidebarProvider implements vscode.WebviewViewProvider {
         }
       }
     });
+  }
+
+  private _postReviewMessages(
+    webview: vscode.Webview,
+    result: ReviewResponse,
+  ): void {
+    webview.postMessage({ type: "loading", value: false });
+    webview.postMessage({ type: "botReply", text: result.message });
+
+    const files = result.retrieved_context ?? [];
+    if (files.length > 0 || result.context_limit_hit) {
+      webview.postMessage({
+        type: "contextInfo",
+        payload: {
+          files,
+          limitHit: result.context_limit_hit ?? false,
+          candidatesConsidered: result.candidates_considered ?? 0,
+        },
+      });
+    }
   }
 
   private _getHtml(webview: vscode.Webview): string {

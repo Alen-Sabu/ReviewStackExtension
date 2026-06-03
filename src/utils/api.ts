@@ -1,5 +1,11 @@
-import * as vscode from "vscode";
 import { CONFIG } from "./config";
+import type { ReviewResponse } from "../types/review";
+
+export type {
+  ReviewResponse,
+  RetrievedContextItem,
+  ContextInfoPayload,
+} from "../types/review";
 
 export async function indexRepo(repoPath: string): Promise<number> {
   const res = await fetch(`${CONFIG.serverUrl}/index`, {
@@ -24,7 +30,7 @@ export async function reviewFunction(payload: {
   language: string;
   conversation: { role: string; content: string }[];
   user_reply?: string;
-}): Promise<{ message: string; needs_clarification: boolean }> {
+}): Promise<ReviewResponse> {
   const res = await fetch(`${CONFIG.serverUrl}/review`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -36,5 +42,5 @@ export async function reviewFunction(payload: {
     throw new Error(err.detail ?? "Review request failed");
   }
 
-  return res.json() as Promise<{ message: string; needs_clarification: boolean }>;
+  return res.json() as Promise<ReviewResponse>;
 }

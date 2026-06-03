@@ -5,6 +5,7 @@ import { ReviewPanel } from "../chat/ReviewPanel";
 import { VSCodeService } from "../services/VSCodeService";
 import { ReviewState } from "../state/ReviewState";
 import { StatusBarUI } from "../ui/StatusBarUI";
+import { ContextPanel, ContextInfoPayload } from "../ui/ContextPanel";
 
 export class MessageHandler {
   constructor(
@@ -13,6 +14,7 @@ export class MessageHandler {
     private reviewState: ReviewState,
     private reviewPanel: ReviewPanel,
     private reviewHeader: ReviewHeader,
+    private contextPanel: ContextPanel,
     private statusBar: StatusBarUI,
     private vscodeService: VSCodeService,
   ) {}
@@ -45,11 +47,16 @@ export class MessageHandler {
       case "reviewFunction":
         this.handleReviewFunction(payload as ReviewFunctionPayload);
         break;
+
+      case "contextInfo":
+        this.contextPanel.display(payload as ContextInfoPayload);
+        break;
     }
   }
 
   private handleReviewFunction(payload: ReviewFunctionPayload): void {
     this.chatManager.clear({ showWelcome: false });
+    this.contextPanel.clear();
     this.reviewHeader.display(payload);
     this.reviewState.startReview({
       filePath: payload.filePath,

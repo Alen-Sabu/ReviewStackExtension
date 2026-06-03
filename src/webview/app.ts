@@ -6,6 +6,7 @@ import { MessageHandler } from "./handlers/MessageHandler";
 import { ReviewState } from "./state/ReviewState";
 import { VSCodeService } from "./services/VSCodeService";
 import { StatusBarUI } from "./ui/StatusBarUI";
+import { ContextPanel } from "./ui/ContextPanel";
 
 const messagesEl = document.getElementById("messages");
 const messagesContainerEl = document.getElementById("messagesContainer");
@@ -17,6 +18,9 @@ const fileInfoEl = document.getElementById("fileInfo");
 const filePathEl = document.getElementById("filePath");
 const langBadgeEl = document.getElementById("langBadge");
 const reviewContentEl = document.getElementById("reviewContent");
+const contextInfoEl = document.getElementById("contextInfo");
+const contextToggleEl = document.getElementById("contextToggle");
+const contextFileListEl = document.getElementById("contextFileList");
 const statusDotEl = document.getElementById("statusDot");
 const reviewStateEl = document.getElementById("reviewState");
 
@@ -31,6 +35,9 @@ if (
   !filePathEl ||
   !langBadgeEl ||
   !reviewContentEl ||
+  !contextInfoEl ||
+  !contextToggleEl ||
+  !contextFileListEl ||
   !statusDotEl ||
   !reviewStateEl
 ) {
@@ -49,6 +56,12 @@ const reviewHeader = new ReviewHeader(
   reviewContentEl,
 );
 
+const contextPanel = new ContextPanel(
+  contextInfoEl,
+  contextToggleEl as HTMLButtonElement,
+  contextFileListEl,
+);
+
 const reviewPanel = new ReviewPanel({
   inputEl,
   sendButtonEl,
@@ -64,6 +77,7 @@ const handler = new MessageHandler(
   reviewState,
   reviewPanel,
   reviewHeader,
+  contextPanel,
   statusBar,
   vscodeService,
 );
