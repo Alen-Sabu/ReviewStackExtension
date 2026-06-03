@@ -1,3 +1,4 @@
+import * as fs from "fs";
 import * as vscode from "vscode";
 import { reviewFunction } from "../utils/api";
 import { StatusBarManager } from "../managers/StatusBarManager";
@@ -13,7 +14,7 @@ let currentReview: {
 export class SecondarySidebarProvider implements vscode.WebviewViewProvider {
   _view?: vscode.WebviewView;
   private _webviewReady = false;
-  private _pendingMessages: any[] = [];
+  private _pendingMessages: unknown[] = [];
 
   constructor(
     private readonly _extensionUri: vscode.Uri,
@@ -26,7 +27,7 @@ export class SecondarySidebarProvider implements vscode.WebviewViewProvider {
     return !!this._view?.visible;
   }
 
-  public sendMessage(message: any): void {
+  public sendMessage(message: unknown): void {
     if (!this._view || !this._webviewReady) {
       this._pendingMessages.push(message);
       return;
@@ -34,7 +35,7 @@ export class SecondarySidebarProvider implements vscode.WebviewViewProvider {
     this._view.webview.postMessage(message);
   }
 
-  private _flushPendingMessages() {
+  private _flushPendingMessages(): void {
     if (!this._view || !this._webviewReady || !this._pendingMessages.length) {
       return;
     }
@@ -45,7 +46,7 @@ export class SecondarySidebarProvider implements vscode.WebviewViewProvider {
     }
   }
 
-  resolveWebviewView(webviewView: vscode.WebviewView) {
+  resolveWebviewView(webviewView: vscode.WebviewView): void {
     this._view = webviewView;
 
     const updateContext = () => {
@@ -69,22 +70,20 @@ export class SecondarySidebarProvider implements vscode.WebviewViewProvider {
     webviewView.webview.options = {
       enableScripts: true,
       localResourceRoots: [
-        vscode.Uri.joinPath(this._extensionUri, "media"), // dev (F5)
-        vscode.Uri.joinPath(this._extensionUri, "dist", "media"), // production
+        vscode.Uri.joinPath(this._extensionUri, "media"),
+        vscode.Uri.joinPath(this._extensionUri, "dist", "media"),
       ],
     };
 
     webviewView.webview.html = this._getHtml(webviewView.webview);
 
     webviewView.webview.onDidReceiveMessage(async (data) => {
-      // ── webview signals it is ready ──────────────────────────────────
       if (data.type === "webviewReady") {
         this._webviewReady = true;
         this._flushPendingMessages();
         return;
       }
 
-      // ── user typed a follow-up ───────────────────────────────────────
       if (data.type === "userMessage") {
         if (!currentReview) {
           webviewView.webview.postMessage({
@@ -115,17 +114,17 @@ export class SecondarySidebarProvider implements vscode.WebviewViewProvider {
             text: result.message,
           });
           this._statusBar.setReady();
-        } catch (e: any) {
+        } catch (e: unknown) {
+          const message = e instanceof Error ? e.message : String(e);
           webviewView.webview.postMessage({ type: "loading", value: false });
           webviewView.webview.postMessage({
             type: "botReply",
-            text: `❌ Error: ${e.message}`,
+            text: `Error: ${message}`,
           });
-          this._statusBar.setError(e.message);
+          this._statusBar.setError(message);
         }
       }
 
-      // ── CodeLens Review button clicked ───────────────────────────────
       if (data.type === "startReview") {
         conversation = [];
         currentReview = {
@@ -134,7 +133,6 @@ export class SecondarySidebarProvider implements vscode.WebviewViewProvider {
           language: data.payload.language,
         };
 
-        // clear old decoration
         const prevEditor = vscode.window.visibleTextEditors.find(
           (e) => e.document.uri.fsPath === currentReview!.filePath,
         );
@@ -162,7 +160,6 @@ export class SecondarySidebarProvider implements vscode.WebviewViewProvider {
           });
           this._statusBar.setReady();
 
-          // ── apply decoration ─────────────────────────────────────────
           const hasIssues =
             result.message.includes("⚠️") ||
             result.message.toLowerCase().includes("issue") ||
@@ -200,277 +197,41 @@ export class SecondarySidebarProvider implements vscode.WebviewViewProvider {
                   );
             }
           }
-        } catch (e: any) {
+        } catch (e: unknown) {
+          const message = e instanceof Error ? e.message : String(e);
           webviewView.webview.postMessage({ type: "loading", value: false });
           webviewView.webview.postMessage({
             type: "botReply",
-            text: `❌ ${e.message}`,
+            text: ` ${message}`,
           });
-          this._statusBar.setError(e.message);
+          this._statusBar.setError(message);
         }
       }
     });
   }
 
   private _getHtml(webview: vscode.Webview): string {
+    const mediaRoot = vscode.Uri.joinPath(this._extensionUri, "dist", "media");
     const styleUri = webview.asWebviewUri(
-      vscode.Uri.joinPath(this._extensionUri, "media", "style.css"),
+      vscode.Uri.joinPath(mediaRoot, "style.css"),
+    );
+    const scriptUri = webview.asWebviewUri(
+      vscode.Uri.joinPath(mediaRoot, "webview.js"),
     );
 
+    const htmlPath = vscode.Uri.joinPath(
+      this._extensionUri,
+      "media",
+      "index.html",
+    );
+    const template = fs.readFileSync(htmlPath.fsPath, "utf8");
     const nonce = getNonce();
 
-    return `<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <meta http-equiv="Content-Security-Policy"
-    content="default-src 'none';
-    style-src ${webview.cspSource} 'unsafe-inline';
-    script-src 'nonce-${nonce}';">
-  <link href="${styleUri}" rel="stylesheet">
-</head>
-<body>
-  <div id="reviewSection">
-    <div class="review-title-row">
-      <span class="status-dot" id="statusDot"></span>
-      <span class="review-title">ReviewStack</span>
-      <span class="review-state" id="reviewState">Ready</span>
-    </div>
-    <div id="fileInfo" style="display:none">
-      <span class="file-path" id="filePath"></span>
-      <span class="lang-badge" id="langBadge"></span>
-    </div>
-    <div id="reviewContent"></div>
-  </div>
-
-  <div id="messagesContainer" class="messages-container" role="log" aria-live="polite">
-    <ul id="messages" class="messages"></ul>
-  </div>
-
-  <div id="inputRow">
-    <textarea id="input" rows="2" placeholder="Ask a follow-up..."></textarea>
-    <button id="send">Send</button>
-  </div>
-
-  <script nonce="${nonce}">
-    const vscode = acquireVsCodeApi();
-    const messages = document.getElementById('messages');
-    const input = document.getElementById('input');
-    const send = document.getElementById('send');
-    const reviewContent = document.getElementById('reviewContent');
-    const LINE_THRESHOLD = 10;
-    let loadingEl = null;
-
-    // signal host that webview is ready to receive messages
-    vscode.postMessage({ type: 'webviewReady' });
-
-    function formatTime() {
-      const d = new Date();
-      return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    }
-
-    function renderMessageContent(text) {
-      const frag = document.createDocumentFragment();
-      const codeRe = /\`\`\`([\s\S]*?)\`\`\`/g;
-      let last = 0;
-      let match;
-
-      while ((match = codeRe.exec(text)) !== null) {
-        const before = text.slice(last, match.index);
-        if (before) {
-          frag.appendChild(document.createTextNode(before));
-        }
-
-        const pre = document.createElement('pre');
-        pre.className = 'code-block';
-
-        const code = document.createElement('code');
-        code.textContent = match[1].trim();
-
-        pre.appendChild(code);
-        frag.appendChild(pre);
-
-        last = match.index + match[0].length;
-      }
-
-      if (last < text.length) {
-        frag.appendChild(document.createTextNode(text.slice(last)));
-      }
-
-      return frag;
-    }
-
-    function addMessage(text, role) {
-      const list = document.getElementById('messages');
-      const li = document.createElement('li');
-      li.className = 'msg ' + role;
-
-      const meta = document.createElement('div');
-      meta.className = 'meta';
-
-      const avatar = document.createElement('div');
-      avatar.textContent = role === 'user' ? '👤' : '⚇';
-
-      const time = document.createElement('div');
-      time.className = 'time';
-      time.textContent = formatTime();
-
-      meta.appendChild(avatar);
-      meta.appendChild(time);
-
-      const bubble = document.createElement('div');
-      bubble.className = 'bubble';
-      bubble.appendChild(renderMessageContent(text));
-
-      const copyBtn = document.createElement('button');
-      copyBtn.className = 'copy-btn';
-      copyBtn.type = 'button';
-      copyBtn.textContent = 'Copy';
-      copyBtn.addEventListener('click', async () => {
-        try {
-          await navigator.clipboard.writeText(text);
-          copyBtn.textContent = 'Copied';
-        } catch (error) {
-          copyBtn.textContent = 'Error';
-        }
-
-        setTimeout(() => {
-          copyBtn.textContent = 'Copy';
-        }, 1000);
-      });
-
-      const content = document.createElement('div');
-      content.style.display = 'flex';
-      content.style.alignItems = 'center';
-      content.style.gap = '8px';
-      content.appendChild(bubble);
-      content.appendChild(copyBtn);
-
-      if (role === 'user') {
-        li.appendChild(content);
-        li.appendChild(meta);
-      } else {
-        li.appendChild(meta);
-        li.appendChild(content);
-      }
-
-      list.appendChild(li);
-      const container = document.getElementById('messagesContainer');
-      container.scrollTop = container.scrollHeight;
-    }
-
-    function showLoading() {
-      if (loadingEl) return;
-      loadingEl = document.createElement('div');
-      loadingEl.className = 'loading';
-      loadingEl.innerText = 'Reviewing...';
-      messages.appendChild(loadingEl);
-      messages.scrollTop = messages.scrollHeight;
-    }
-
-    function hideLoading() {
-      if (loadingEl) { loadingEl.remove(); loadingEl = null; }
-    }
-
-    function setStatus(state) {
-      const dot = document.getElementById('statusDot');
-      const label = document.getElementById('reviewState');
-      dot.className = 'status-dot ' + state;
-      const labels = {
-        ready: 'Ready',
-        indexing: 'Indexing...',
-        reviewing: 'Reviewing...',
-        error: 'Error',
-      };
-      label.textContent = labels[state] || 'Ready';
-    }
-
-    function displayReviewFunction(payload) {
-      const { code, filePath, language } = payload;
-
-      const fileInfoEl  = document.getElementById('fileInfo');
-      const filePathEl  = document.getElementById('filePath');
-      const langBadgeEl = document.getElementById('langBadge');
-
-      filePathEl.textContent  = (filePath.split('/').pop() || filePath.split('\\\\').pop() || filePath);
-      langBadgeEl.textContent = language;
-      fileInfoEl.style.display = 'flex';
-
-      const lines = code.split('\\n');
-      const reviewItem = document.createElement('div');
-      reviewItem.className = 'review-item';
-
-      if (lines.length > LINE_THRESHOLD) {
-        const chip = document.createElement('div');
-        chip.className = 'function-chip';
-        chip.textContent = 'Lines 1–' + lines.length + ' (' + language + ') ▶';
-        let expanded = false;
-        chip.addEventListener('click', () => {
-          if (!expanded) {
-            const cd = document.createElement('div');
-            cd.className = 'code-display';
-            cd.textContent = code;
-            reviewItem.appendChild(cd);
-            chip.textContent = 'Lines 1–' + lines.length + ' (' + language + ') ▼';
-            expanded = true;
-          } else {
-            reviewItem.querySelector('.code-display')?.remove();
-            chip.textContent = 'Lines 1–' + lines.length + ' (' + language + ') ▶';
-            expanded = false;
-          }
-        });
-        reviewItem.appendChild(chip);
-      } else {
-        const cd = document.createElement('div');
-        cd.className = 'code-display';
-        cd.textContent = code;
-        reviewItem.appendChild(cd);
-      }
-
-      reviewContent.innerHTML = '';
-      reviewContent.appendChild(reviewItem);
-    }
-
-    send.addEventListener('click', () => {
-      const text = input.value.trim();
-      if (!text) return;
-      addMessage(text, 'user');
-      input.value = '';
-      vscode.postMessage({ type: 'userMessage', text });
-    });
-
-    input.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        send.click();
-      }
-    });
-
-    window.addEventListener('message', (event) => {
-      const { type, text, payload, value } = event.data;
-
-      if (type === 'loading') {
-        value ? showLoading() : hideLoading();
-        setStatus(value ? 'reviewing' : 'ready');
-      }
-
-      if (type === 'botReply') {
-        hideLoading();
-        setStatus('ready');
-        addMessage(text, 'bot');
-      }
-
-      if (type === 'reviewFunction') {
-        messages.innerHTML = '';
-        displayReviewFunction(payload);
-        setStatus('reviewing');
-        showLoading();
-        vscode.postMessage({ type: 'startReview', payload });
-      }
-    });
-  <\/script>
-</body>
-</html>`;
+    return template
+      .replace(/\{\{cspSource\}\}/g, webview.cspSource)
+      .replace(/\{\{nonce\}\}/g, nonce)
+      .replace(/\{\{styleUri\}\}/g, styleUri.toString())
+      .replace(/\{\{scriptUri\}\}/g, scriptUri.toString());
   }
 }
 

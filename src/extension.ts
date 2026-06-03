@@ -34,38 +34,32 @@ export function activate(context: vscode.ExtensionContext) {
     decorationManager,
   );
   context.subscriptions.push(
-    vscode.window.registerWebviewViewProvider("mySecondaryView", chatProvider),
+    vscode.window.registerWebviewViewProvider("reviewstackView", chatProvider),
   );
 
-  // This command fires when user clicks the activity bar icon
-  // Commands to open/focus the secondary sidebar view
   context.subscriptions.push(
     vscode.commands.registerCommand("myChat.open", async () => {
-      // Toggle: if the view is visible, close the auxiliary bar; otherwise open+focus it
       try {
-        const isVisible = chatProvider.isVisible;
-
-        if (isVisible) {
-          // Close the auxiliary bar
+        if (chatProvider.isVisible) {
           await vscode.commands.executeCommand(
             "workbench.action.toggleAuxiliaryBar",
           );
         } else {
-          // Reveal the container first, then focus the auxiliary bar so our view appears
-          await vscode.commands.executeCommand(
-            "workbench.view.extension.mySecondaryContainer",
-          );
-          // short delay to allow VS Code to reveal the container before focusing
-          await new Promise((r) => setTimeout(r, 80));
-          await vscode.commands.executeCommand(
-            "workbench.action.focusAuxiliaryBar",
-          );
+          await openSecondarySidebar();
         }
       } catch (e) {
         console.error("Error toggling secondary sidebar", e);
       }
     }),
   );
+
+  async function openSecondarySidebar(): Promise<void> {
+    await vscode.commands.executeCommand(
+      "workbench.view.extension.reviewstackContainer",
+    );
+    await new Promise((r) => setTimeout(r, 80));
+    await vscode.commands.executeCommand("workbench.action.focusAuxiliaryBar");
+  }
 
   const codeLensProvider = new ReviewCodeLensProvider();
   context.subscriptions.push(
@@ -112,13 +106,7 @@ export function activate(context: vscode.ExtensionContext) {
 
         // Send functionCode to your secondary sidebar or AI API for review
         if (!chatProvider.isVisible) {
-          await vscode.commands.executeCommand(
-            "workbench.view.extension.mySecondaryContainer",
-          );
-          await new Promise((r) => setTimeout(r, 80));
-          await vscode.commands.executeCommand(
-            "workbench.action.focusAuxiliaryBar",
-          );
+          await openSecondarySidebar();
         }
 
         statusBar.setReviewing();

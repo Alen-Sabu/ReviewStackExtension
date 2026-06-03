@@ -1,0 +1,64 @@
+import { ChatManager } from "../chat/ChatManager";
+import { LoadingManager } from "../chat/Loading";
+import { ReviewHeader, ReviewFunctionPayload } from "../chat/ReviewHeader";
+import { ReviewPanel } from "../chat/ReviewPanel";
+import { VSCodeService } from "../services/VSCodeService";
+import { ReviewState } from "../state/ReviewState";
+import { StatusBarUI } from "../ui/StatusBarUI";
+
+export class MessageHandler {
+  constructor(
+    private chatManager: ChatManager,
+    private loadingManager: LoadingManager,
+    private reviewState: ReviewState,
+    private reviewPanel: ReviewPanel,
+    private reviewHeader: ReviewHeader,
+    private statusBar: StatusBarUI,
+    private vscodeService: VSCodeService,
+  ) {}
+
+  handle(event: MessageEvent): void {
+    const { type, text, payload, value } = event.data;
+
+    switch (type) {
+      case "loading":
+        if (value) {
+          this.loadingManager.show();
+          this.statusBar.setStatus("reviewing");
+        } else {
+          this.loadingManager.hide();
+          this.statusBar.setStatus("ready");
+          this.reviewState.finishReview();
+          this.reviewPanel.onReviewFinished();
+        }
+        this.reviewPanel.setLoading(!!value);
+        break;
+
+      case "botReply":
+        this.loadingManager.hide();
+        this.statusBar.setStatus("ready");
+        this.chatManager.addMessage(text, "bot");
+        this.reviewState.finishReview();
+        this.reviewPanel.onReviewFinished();
+        break;
+
+      case "reviewFunction":
+        this.handleReviewFunction(payload as ReviewFunctionPayload);
+        break;
+    }
+  }
+
+  private handleReviewFunction(payload: ReviewFunctionPayload): void {
+    this.chatManager.clear({ showWelcome: false });
+    this.reviewHeader.display(payload);
+    this.reviewState.startReview({
+      filePath: payload.filePath,
+      functionCode: payload.code,
+      language: payload.language,
+    });
+    this.statusBar.setStatus("reviewing");
+    this.loadingManager.show();
+    this.reviewPanel.onReviewStarted();
+    this.vscodeService.send("startReview", { payload });
+  }
+}

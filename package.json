@@ -17,17 +17,17 @@
     "viewsContainers": {
       "secondarySidebar": [
         {
-          "id": "mySecondaryContainer",
-          "title": "My Secondary Panel",
+          "id": "reviewstackContainer",
+          "title": "ReviewStack",
           "icon": "media/icon.svg"
         }
       ]
     },
     "views": {
-      "mySecondaryContainer": [
+      "reviewstackContainer": [
         {
-          "id": "mySecondaryView",
-          "name": "Secondary Panel",
+          "id": "reviewstackView",
+          "name": "ReviewStack",
           "type": "webview",
           "icon": "media/icon.svg"
         }

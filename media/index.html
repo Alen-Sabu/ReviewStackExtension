@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy"
+    content="default-src 'none';
+    style-src {{cspSource}} 'unsafe-inline';
+    script-src {{cspSource}} 'nonce-{{nonce}}';">
+  <link href="{{styleUri}}" rel="stylesheet">
+</head>
+<body>
+  <div id="reviewSection">
+    <div class="review-title-row">
+      <span class="status-dot" id="statusDot"></span>
+      <span class="review-title">ReviewStack</span>
+      <span class="review-state" id="reviewState">Ready</span>
+    </div>
+    <div id="fileInfo" style="display:none">
+      <span class="file-path" id="filePath"></span>
+      <span class="lang-badge" id="langBadge"></span>
+    </div>
+    <div id="reviewContent"></div>
+  </div>
+
+  <div id="messagesContainer" class="messages-container" role="log" aria-live="polite">
+    <div id="emptyState" class="chat-empty-state">
+      <div class="empty-state-icon" aria-hidden="true">⚇</div>
+      <h2 class="empty-state-title">Hi, how can I help you today?</h2>
+      <p class="empty-state-text">
+        Click <strong>Review</strong> on any function in your editor to analyze it.
+        Follow-up questions will appear here once a review is running.
+      </p>
+    </div>
+    <ul id="messages" class="messages"></ul>
+  </div>
+
+  <div class="prompt-composer" id="promptComposer">
+    <div class="prompt-shell">
+      <textarea
+        id="input"
+        class="prompt-input"
+        rows="1"
+        placeholder="Ask a follow-up about this function…"
+        aria-label="Follow-up message"
+      ></textarea>
+      <button
+        id="send"
+        class="send-btn"
+        type="button"
+        aria-label="Send message"
+        title="Send (Enter)"
+      >
+        <svg class="send-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <path fill="currentColor" d="M2.01 21 23 12 2.01 3 2 10l15 2-15 2z" />
+        </svg>
+      </button>
+    </div>
+    <p class="prompt-hint">Enter to send · Shift+Enter for new line</p>
+  </div>
+
+  <script nonce="{{nonce}}" src="{{scriptUri}}"></script>
+</body>
+</html>
