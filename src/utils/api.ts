@@ -44,3 +44,28 @@ export async function reviewFunction(payload: {
 
   return res.json() as Promise<ReviewResponse>;
 }
+
+export async function submitFeedback(payload: {
+  repo_path: string;
+  message_id: string;
+  value: "up" | "down";
+  preview?: string;
+  file_path?: string;
+}): Promise<void> {
+  const res = await fetch(`${CONFIG.serverUrl}/feedback`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      repo_path: payload.repo_path,
+      message_id: payload.message_id,
+      value: payload.value,
+      preview: payload.preview ?? "",
+      file_path: payload.file_path ?? "",
+    }),
+  });
+
+  if (!res.ok) {
+    const err = await res.json() as { detail?: string };
+    throw new Error(err.detail ?? "Feedback submission failed");
+  }
+}

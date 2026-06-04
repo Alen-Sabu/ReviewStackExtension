@@ -1,6 +1,6 @@
 import * as fs from "fs";
 import * as vscode from "vscode";
-import { reviewFunction, type ReviewResponse } from "../utils/api";
+import { reviewFunction, submitFeedback, type ReviewResponse } from "../utils/api";
 import { StatusBarManager } from "../managers/StatusBarManager";
 import { DecorationManager } from "../managers/DecorationManager";
 
@@ -198,6 +198,29 @@ export class SecondarySidebarProvider implements vscode.WebviewViewProvider {
           });
           this._statusBar.setError(message);
         }
+      }
+
+      if (data.type === "feedback") {
+        const value = data.value as string;
+        if (value !== "up" && value !== "down") {
+          return;
+        }
+        try {
+          await submitFeedback({
+            repo_path: this._repoPath,
+            message_id: String(data.messageId ?? ""),
+            value,
+            preview: String(data.preview ?? ""),
+            file_path: currentReview?.filePath ?? "",
+          });
+          void vscode.window.showInformationMessage(
+            value === "up" ? "Thanks for the feedback!" : "Feedback recorded.",
+          );
+        } catch (e: unknown) {
+          const message = e instanceof Error ? e.message : String(e);
+          void vscode.window.showWarningMessage(`Feedback failed: ${message}`);
+        }
+        return;
       }
     });
   }

@@ -1,14 +1,12 @@
-declare function acquireVsCodeApi(): {
-    postMessage(message: { type: string; [key: string]: unknown }): void;
-};
+import { getVsCodeApi } from "./vscodeApi";
 
 export class VSCodeService {
-    private readonly vscode = acquireVsCodeApi();
+  private readonly vscode = getVsCodeApi();
 
-    send(type: string, payload: Record<string, unknown> = {}) {
-        this.vscode.postMessage({
-            type,
-            ...payload,
-        });
-    }
+  send(type: string, payload: Record<string, unknown> = {}) {
+    this.vscode.postMessage({
+      type,
+      ...payload,
+    });
+  }
 }
