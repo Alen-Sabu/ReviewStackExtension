@@ -31,18 +31,20 @@ export async function reviewFunction(payload: {
   conversation: { role: string; content: string }[];
   user_reply?: string;
 }): Promise<ReviewResponse> {
-  const res = await fetch(`${CONFIG.serverUrl}/review`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-
-  if (!res.ok) {
-    const err = await res.json() as { detail?: string };
+  try {
+    const start = performance.now();
+    const res = await fetch(`${CONFIG.serverUrl}/review`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const end = performance.now();
+    console.log(`Review function took ${end - start} milliseconds`);
+    return res.json() as Promise<ReviewResponse>;
+  }catch (error) {
+    const err = error as { detail?: string };
     throw new Error(err.detail ?? "Review request failed");
   }
-
-  return res.json() as Promise<ReviewResponse>;
 }
 
 export async function submitFeedback(payload: {
