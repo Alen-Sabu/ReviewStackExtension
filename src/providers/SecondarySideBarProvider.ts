@@ -1,6 +1,6 @@
 import * as fs from "fs";
 import * as vscode from "vscode";
-import { reviewFunction, submitFeedback, type ReviewResponse } from "../utils/api";
+import { reviewFunctionStream, submitFeedback, type ReviewResponse } from "../utils/api";
 import { StatusBarManager } from "../managers/StatusBarManager";
 import { DecorationManager } from "../managers/DecorationManager";
 
@@ -80,6 +80,16 @@ export class SecondarySidebarProvider implements vscode.WebviewViewProvider {
     webviewView.webview.onDidReceiveMessage(async (data) => {
       if (data.type === "webviewReady") {
         this._webviewReady = true;
+
+        if(currentReview) {
+          webviewView.webview.postMessage({
+            type: "restoreSession", 
+            payload: {
+              review: currentReview,
+              messages: conversation, 
+            }
+          })
+        }
         this._flushPendingMessages();
         return;
       }
@@ -96,7 +106,7 @@ export class SecondarySidebarProvider implements vscode.WebviewViewProvider {
         try {
           webviewView.webview.postMessage({ type: "loading", value: true });
 
-          const result = await reviewFunction({
+          const result = await this._runReviewStream(webviewView.webview, {
             repo_path: this._repoPath,
             file_path: currentReview.filePath,
             function_code: currentReview.functionCode,
@@ -108,7 +118,6 @@ export class SecondarySidebarProvider implements vscode.WebviewViewProvider {
           conversation.push({ role: "user", content: data.text });
           conversation.push({ role: "assistant", content: result.message });
 
-          this._postReviewMessages(webviewView.webview, result);
           this._statusBar.setReady();
         } catch (e: unknown) {
           const message = e instanceof Error ? e.message : String(e);
@@ -139,7 +148,7 @@ export class SecondarySidebarProvider implements vscode.WebviewViewProvider {
         try {
           webviewView.webview.postMessage({ type: "loading", value: true });
 
-          const result = await reviewFunction({
+          const result = await this._runReviewStream(webviewView.webview, {
             repo_path: this._repoPath,
             file_path: currentReview.filePath,
             function_code: currentReview.functionCode,
@@ -149,7 +158,6 @@ export class SecondarySidebarProvider implements vscode.WebviewViewProvider {
 
           conversation.push({ role: "assistant", content: result.message });
 
-          this._postReviewMessages(webviewView.webview, result);
           this._statusBar.setReady();
 
           const hasIssues =
@@ -225,12 +233,35 @@ export class SecondarySidebarProvider implements vscode.WebviewViewProvider {
     });
   }
 
-  private _postReviewMessages(
+  private async _runReviewStream(
     webview: vscode.Webview,
-    result: ReviewResponse,
-  ): void {
+    payload: {
+      repo_path: string;
+      file_path: string;
+      function_code: string;
+      language: string;
+      conversation: { role: string; content: string }[];
+      user_reply?: string;
+    },
+  ): Promise<ReviewResponse> {
+    let streamStarted = false;
+
+    const result = await reviewFunctionStream(payload, (chunk) => {
+      if (chunk.delta && !streamStarted) {
+        streamStarted = true;
+        webview.postMessage({ type: "botReplyStart" });
+      }
+      if (chunk.delta) {
+        webview.postMessage({ type: "botReplyChunk", text: chunk.delta });
+      }
+    });
+
+    if (!streamStarted) {
+      webview.postMessage({ type: "botReplyStart" });
+    }
+
+    webview.postMessage({ type: "botReplyEnd" });
     webview.postMessage({ type: "loading", value: false });
-    webview.postMessage({ type: "botReply", text: result.message });
 
     const files = result.retrieved_context ?? [];
     if (files.length > 0 || result.context_limit_hit) {
@@ -243,6 +274,8 @@ export class SecondarySidebarProvider implements vscode.WebviewViewProvider {
         },
       });
     }
+
+    return result;
   }
 
   private _getHtml(webview: vscode.Webview): string {

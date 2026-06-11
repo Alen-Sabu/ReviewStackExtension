@@ -35,11 +35,44 @@ export class MessageHandler {
         }
         this.reviewPanel.setLoading(!!value);
         break;
+      
+      case "restoreSession":
+        this.chatManager.clear({ showWelcome: false });
+        this.reviewHeader.display({
+          filePath: payload.review.filePath,
+          code: payload.review.functionCode,
+          language: payload.review.language,
+        })
+        this.reviewState.startReview(payload.review); 
+        this.reviewState.finishReview();
+
+        for(const message of payload.messages) {
+          this.chatManager.addMessage(message.content, message.role);
+        }
+        this.statusBar.setStatus("ready");
+        break;
 
       case "botReply":
         this.loadingManager.hide();
         this.statusBar.setStatus("ready");
         this.chatManager.addMessage(text, "bot");
+        this.reviewState.finishReview();
+        this.reviewPanel.onReviewFinished();
+        break;
+
+      case "botReplyStart":
+        this.loadingManager.hide();
+        this.chatManager.startStreamingMessage();
+        break;
+
+      case "botReplyChunk":
+        this.chatManager.appendStreamingChunk(text);
+        break;
+
+      case "botReplyEnd":
+        this.loadingManager.hide();
+        this.statusBar.setStatus("ready");
+        this.chatManager.finishStreamingMessage();
         this.reviewState.finishReview();
         this.reviewPanel.onReviewFinished();
         break;

@@ -24,6 +24,8 @@ export type OllamaTiming = {
 export type ReviewResponse = {
   message: string;
   needs_clarification: boolean;
+  suggested_code?: string | null;
+  suggested_language?: string | null;
   retrieved_context?: RetrievedContextItem[];
   context_limit_hit?: boolean;
   candidates_considered?: number;
@@ -35,4 +37,18 @@ export type ContextInfoPayload = {
   files: RetrievedContextItem[];
   limitHit: boolean;
   candidatesConsidered: number;
+};
+
+export type ReviewStreamChunk = {
+  delta: string;
+  done: boolean;
+  error?: string;
+  needs_clarification?: boolean;
+  suggested_code?: string | null;
+  suggested_language?: string | null;
+  retrieved_context?: RetrievedContextItem[];
+  context_limit_hit?: boolean;
+  candidates_considered?: number;
+  timing?: ReviewTiming;
+  ollama_timing?: OllamaTiming;
 };

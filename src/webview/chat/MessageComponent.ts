@@ -1,5 +1,5 @@
 import { formatTime } from "../utils/time";
-import { renderMessageContent } from "../utils/markdown";
+import { renderMessageContent, enhanceRenderedContent } from "../utils/markdown";
 import { ClipboardService } from "../services/ClipboardService";
 import { VSCodeService } from "../services/VSCodeService";
 
@@ -14,8 +14,9 @@ export class MessageComponent {
     const meta = this.createMeta(role);
 
     const bubbleBody = document.createElement("div");
-    bubbleBody.className = "bubble-body";
+    bubbleBody.className = "bubble-body markdown-body";
     bubbleBody.appendChild(renderMessageContent(text));
+    enhanceRenderedContent(bubbleBody);
 
     const actions = document.createElement("div");
     actions.className = "message-actions";
@@ -41,6 +42,24 @@ export class MessageComponent {
     }
 
     return li;
+  }
+
+  static finalizeBotMessage(streamingEl: HTMLElement, text: string): HTMLElement {
+    streamingEl.classList.remove("streaming");
+
+    const meta = this.createMeta("bot");
+    streamingEl.appendChild(meta);
+
+    const bubble = streamingEl.querySelector(".bubble");
+    if (bubble) {
+      const actions = document.createElement("div");
+      actions.className = "message-actions";
+      actions.appendChild(this.createFeedbackBar(text));
+      actions.appendChild(this.createCopyButton(text));
+      bubble.appendChild(actions);
+    }
+
+    return streamingEl;
   }
 
   private static createMessageId(): string {

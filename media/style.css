@@ -273,9 +273,84 @@ body {
 }
 
 .bubble-body {
-  white-space: pre-wrap;
   overflow-wrap: anywhere;
   word-break: break-word;
+}
+
+.bubble-body.streaming-body,
+.msg.streaming .bubble-body {
+  white-space: pre-wrap;
+}
+
+.markdown-body h2,
+.markdown-body h3 {
+  font-size: 13px;
+  font-weight: 600;
+  margin: 14px 0 6px;
+  line-height: 1.4;
+  color: var(--vscode-foreground);
+}
+
+.markdown-body h2:first-child,
+.markdown-body h3:first-child {
+  margin-top: 0;
+}
+
+.markdown-body p {
+  margin: 6px 0;
+}
+
+.markdown-body ul,
+.markdown-body ol {
+  margin: 6px 0 8px;
+  padding-left: 20px;
+}
+
+.markdown-body li {
+  margin: 4px 0;
+}
+
+.markdown-body strong {
+  font-weight: 600;
+}
+
+.markdown-body code.inline-code {
+  font-family: var(--vscode-editor-font-family);
+  font-size: 12px;
+  background: var(--vscode-textCodeBlock-background, var(--vscode-editor-background));
+  border: 1px solid var(--vscode-widget-border, var(--vscode-input-border));
+  border-radius: 4px;
+  padding: 1px 4px;
+}
+
+.markdown-body hr {
+  border: none;
+  border-top: 1px solid var(--vscode-widget-border, var(--vscode-input-border));
+  margin: 10px 0;
+}
+
+.code-block-wrapper {
+  position: relative;
+}
+
+.code-copy-btn {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  padding: 2px 8px;
+  font-size: 11px;
+  line-height: 1.4;
+  border-radius: 4px;
+  border: 1px solid var(--vscode-widget-border, var(--vscode-input-border));
+  background: var(--vscode-editor-background);
+  color: var(--vscode-foreground);
+  cursor: pointer;
+  opacity: 0.85;
+}
+
+.code-copy-btn:hover {
+  opacity: 1;
+  background: var(--vscode-list-hoverBackground);
 }
 
 .msg.bot .bubble {
@@ -321,6 +396,10 @@ body {
   overflow-y: hidden;
   margin: 6px 0;
   box-sizing: border-box;
+}
+
+.code-block.code-block-wrapper {
+  padding-top: 28px;
 }
 
 .code-block code {
