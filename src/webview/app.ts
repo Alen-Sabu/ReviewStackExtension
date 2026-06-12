@@ -3,85 +3,170 @@ import { LoadingManager } from "./chat/Loading";
 import { ReviewHeader } from "./chat/ReviewHeader";
 import { ReviewPanel } from "./chat/ReviewPanel";
 import { MessageHandler } from "./handlers/MessageHandler";
+import { OnboardingController } from "./obboarding/OnboardingController";
 import { ReviewState } from "./state/ReviewState";
 import { VSCodeService } from "./services/VSCodeService";
 import { StatusBarUI } from "./ui/StatusBarUI";
 import { ContextPanel } from "./ui/ContextPanel";
 
-const messagesEl = document.getElementById("messages");
-const messagesContainerEl = document.getElementById("messagesContainer");
-const emptyStateEl = document.getElementById("emptyState");
-const inputEl = document.getElementById("input") as HTMLTextAreaElement | null;
-const sendButtonEl = document.getElementById("send") as HTMLButtonElement | null;
-const promptComposerEl = document.getElementById("promptComposer");
-const fileInfoEl = document.getElementById("fileInfo");
-const filePathEl = document.getElementById("filePath");
-const langBadgeEl = document.getElementById("langBadge");
-const reviewContentEl = document.getElementById("reviewContent");
-const contextInfoEl = document.getElementById("contextInfo");
-const contextToggleEl = document.getElementById("contextToggle");
-const contextFileListEl = document.getElementById("contextFileList");
-const statusDotEl = document.getElementById("statusDot");
-const reviewStateEl = document.getElementById("reviewState");
-
-if (
-  !messagesEl ||
-  !messagesContainerEl ||
-  !emptyStateEl ||
-  !inputEl ||
-  !sendButtonEl ||
-  !promptComposerEl ||
-  !fileInfoEl ||
-  !filePathEl ||
-  !langBadgeEl ||
-  !reviewContentEl ||
-  !contextInfoEl ||
-  !contextToggleEl ||
-  !contextFileListEl ||
-  !statusDotEl ||
-  !reviewStateEl
-) {
-  throw new Error("ReviewStack webview is missing required DOM elements.");
+function requireEl<T extends HTMLElement>(el: T | null, id: string): T {
+  if (!el) {
+    throw new Error(`ReviewStack webview is missing required DOM element: #${id}`);
+  }
+  return el;
 }
 
+const messagesEl = requireEl(document.getElementById("messages"), "messages");
+const messagesContainerEl = requireEl(
+  document.getElementById("messagesContainer"),
+  "messagesContainer",
+);
+const emptyStateEl = requireEl(document.getElementById("emptyState"), "emptyState");
+const inputEl = requireEl(
+  document.getElementById("input") as HTMLTextAreaElement | null,
+  "input",
+);
+const sendButtonEl = requireEl(
+  document.getElementById("send") as HTMLButtonElement | null,
+  "send",
+);
+const promptComposerEl = requireEl(
+  document.getElementById("promptComposer"),
+  "promptComposer",
+);
+const fileInfoEl = requireEl(document.getElementById("fileInfo"), "fileInfo");
+const filePathEl = requireEl(document.getElementById("filePath"), "filePath");
+const langBadgeEl = requireEl(document.getElementById("langBadge"), "langBadge");
+const reviewContentEl = requireEl(
+  document.getElementById("reviewContent"),
+  "reviewContent",
+);
+const contextInfoEl = requireEl(document.getElementById("contextInfo"), "contextInfo");
+const contextToggleEl = requireEl(
+  document.getElementById("contextToggle"),
+  "contextToggle",
+);
+const contextFileListEl = requireEl(
+  document.getElementById("contextFileList"),
+  "contextFileList",
+);
+const statusDotEl = requireEl(document.getElementById("statusDot"), "statusDot");
+const reviewStateEl = requireEl(document.getElementById("reviewState"), "reviewState");
+const reviewSectionEl = requireEl(
+  document.getElementById("reviewSection"),
+  "reviewSection",
+);
+const onboardingRootEl = requireEl(
+  document.getElementById("onboardingRoot"),
+  "onboardingRoot",
+);
+const onboardingStepEl = requireEl(
+  document.getElementById("onboardingStep"),
+  "onboardingStep",
+);
+
 const vscodeService = new VSCodeService();
-const reviewState = new ReviewState();
-const chatManager = new ChatManager(messagesEl, messagesContainerEl, emptyStateEl);
-const loadingManager = new LoadingManager(messagesEl);
-const statusBar = new StatusBarUI(statusDotEl, reviewStateEl);
-const reviewHeader = new ReviewHeader(
-  fileInfoEl,
-  filePathEl,
-  langBadgeEl,
-  reviewContentEl,
-);
+let chatMounted = false;
+let onboardingMounted = false;
 
-const contextPanel = new ContextPanel(
-  contextInfoEl,
-  contextToggleEl as HTMLButtonElement,
-  contextFileListEl,
-);
+function setChatVisible(visible: boolean): void {
+  reviewSectionEl.hidden = !visible;
+  messagesContainerEl.hidden = !visible;
+  promptComposerEl.hidden = !visible;
+}
 
-const reviewPanel = new ReviewPanel({
-  inputEl,
-  sendButtonEl,
-  promptComposerEl,
-  chatManager,
-  vscodeService,
-  reviewState,
-});
+function mountChatApp(): void {
+  if (chatMounted) {
+    return;
+  }
+  chatMounted = true;
+  onboardingRootEl.hidden = true;
+  setChatVisible(true);
 
-const handler = new MessageHandler(
-  chatManager,
-  loadingManager,
-  reviewState,
-  reviewPanel,
-  reviewHeader,
-  contextPanel,
-  statusBar,
-  vscodeService,
-);
+  const reviewState = new ReviewState();
+  const chatManager = new ChatManager(messagesEl, messagesContainerEl, emptyStateEl);
+  const loadingManager = new LoadingManager(messagesEl);
+  const statusBar = new StatusBarUI(statusDotEl, reviewStateEl);
+  const reviewHeader = new ReviewHeader(
+    fileInfoEl,
+    filePathEl,
+    langBadgeEl,
+    reviewContentEl,
+  );
 
+  const contextPanel = new ContextPanel(
+    contextInfoEl,
+    contextToggleEl as HTMLButtonElement,
+    contextFileListEl,
+  );
+
+  const reviewPanel = new ReviewPanel({
+    inputEl,
+    sendButtonEl,
+    promptComposerEl,
+    chatManager,
+    vscodeService,
+    reviewState,
+  });
+
+  const handler = new MessageHandler(
+    chatManager,
+    loadingManager,
+    reviewState,
+    reviewPanel,
+    reviewHeader,
+    contextPanel,
+    statusBar,
+    vscodeService,
+  );
+
+  window.addEventListener("message", (e) => handler.handle(e));
+}
+
+function mountOnboarding(): void {
+  if (onboardingMounted) {
+    return;
+  }
+  onboardingMounted = true;
+  setChatVisible(false);
+  onboardingRootEl.hidden = false;
+
+  new OnboardingController(
+    onboardingStepEl,
+    onboardingRootEl,
+    vscodeService,
+    () => {
+      onboardingMounted = false;
+      mountChatApp();
+    },
+  ).start();
+}
+
+function boot(): void {
+  if (onboardingRootEl.hidden) {
+    mountChatApp();
+    return;
+  }
+  mountOnboarding();
+}
+
+boot();
 vscodeService.send("webviewReady");
 
-window.addEventListener("message", (e) => handler.handle(e));
+window.addEventListener("message", (e) => {
+  if (e.data?.type !== "init") {
+    return;
+  }
+
+  if (e.data.onboardingComplete) {
+    if (!chatMounted) {
+      onboardingMounted = false;
+      mountChatApp();
+    }
+    return;
+  }
+
+  if (!onboardingMounted) {
+    mountOnboarding();
+  }
+});

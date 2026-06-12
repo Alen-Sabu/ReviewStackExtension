@@ -598,3 +598,228 @@ body {
   color: var(--vscode-descriptionForeground);
   opacity: 0.85;
 }
+
+/* ── Onboarding ── */
+.onboarding-root {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px 16px;
+}
+
+.onboarding-screen,
+.onboarding-welcome {
+  width: 100%;
+  max-width: 420px;
+  margin: 0 auto;
+}
+
+.onboarding-card {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 24px 20px;
+  border-radius: 12px;
+  border: 1px solid var(--vscode-widget-border, rgba(128, 128, 128, 0.25));
+  background: var(--vscode-editor-background);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+
+.onboarding-welcome-hero,
+.onboarding-card-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 8px;
+}
+
+.onboarding-logo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  margin-bottom: 4px;
+  color: #fff;
+  background: linear-gradient(135deg, #2196f3 0%, #7c4dff 100%);
+  box-shadow: 0 6px 16px rgba(33, 150, 243, 0.35);
+}
+
+.onboarding-logo-icon {
+  width: 28px;
+  height: 28px;
+}
+
+.onboarding-eyebrow {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--vscode-textLink-foreground);
+}
+
+.onboarding-title {
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+}
+
+.onboarding-text {
+  font-size: 12px;
+  color: var(--vscode-descriptionForeground);
+  line-height: 1.55;
+}
+
+.onboarding-lead {
+  max-width: 32ch;
+}
+
+.onboarding-features {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 4px 0;
+}
+
+.onboarding-feature {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--vscode-foreground);
+}
+
+.onboarding-feature-icon {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  font-size: 12px;
+  background: var(--vscode-badge-background);
+  color: var(--vscode-badge-foreground);
+}
+
+.onboarding-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.onboarding-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--vscode-descriptionForeground);
+}
+
+.onboarding-input {
+  padding: 8px 10px;
+  font-size: 12px;
+  font-family: var(--vscode-font-family);
+  color: var(--vscode-input-foreground);
+  background: var(--vscode-input-background);
+  border: 1px solid var(--vscode-input-border, rgba(128, 128, 128, 0.35));
+  border-radius: 6px;
+}
+
+.onboarding-input:focus {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: -1px;
+}
+
+.onboarding-link {
+  font-size: 11px;
+  color: var(--vscode-textLink-foreground);
+  text-decoration: none;
+}
+
+.onboarding-link:hover {
+  text-decoration: underline;
+}
+
+.onboarding-provider-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.onboarding-provider-btn,
+.onboarding-btn {
+  padding: 10px 14px;
+  font-size: 12px;
+  font-family: var(--vscode-font-family);
+  border-radius: 6px;
+  border: 1px solid var(--vscode-button-border, transparent);
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.1s ease;
+}
+
+.onboarding-provider-btn {
+  text-align: left;
+  color: var(--vscode-foreground);
+  background: var(--vscode-button-secondaryBackground);
+}
+
+.onboarding-provider-btn:hover {
+  background: var(--vscode-button-secondaryHoverBackground);
+}
+
+.onboarding-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+
+.onboarding-btn.primary,
+.onboarding-cta {
+  color: var(--vscode-button-foreground);
+  background: var(--vscode-button-background);
+}
+
+.onboarding-btn.primary:hover,
+.onboarding-cta:hover {
+  background: var(--vscode-button-hoverBackground);
+}
+
+.onboarding-cta {
+  width: 100%;
+  margin-top: 4px;
+  font-weight: 600;
+}
+
+.onboarding-btn.secondary {
+  color: var(--vscode-button-secondaryForeground);
+  background: var(--vscode-button-secondaryBackground);
+}
+
+.onboarding-btn.secondary:hover {
+  background: var(--vscode-button-secondaryHoverBackground);
+}
+
+.onboarding-test-result {
+  font-size: 11px;
+  padding: 8px 10px;
+  border-radius: 6px;
+}
+
+.onboarding-test-result.success {
+  color: #2e7d32;
+  background: rgba(76, 175, 80, 0.12);
+}
+
+.onboarding-test-result.error {
+  color: #c62828;
+  background: rgba(244, 67, 54, 0.12);
+}

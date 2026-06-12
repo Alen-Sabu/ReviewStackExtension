@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import { SecondarySidebarProvider } from "./providers/SecondarySideBarProvider";
 import { ReviewCodeLensProvider } from "./providers/CodeLensProvider";
+import { ProviderConfigService } from "./services/ProviderConfigService";
 import { extractFunctionAt } from "./utils/extractFunction";
 import { indexRepo } from "./utils/api";
 import { StatusBarManager } from "./managers/StatusBarManager";
@@ -27,11 +28,13 @@ export function activate(context: vscode.ExtensionContext) {
       );
   }
 
+  const providerConfig = new ProviderConfigService(context);
   const chatProvider = new SecondarySidebarProvider(
     context.extensionUri,
     repoPath,
     statusBar,
     decorationManager,
+    providerConfig,
   );
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider("reviewstackView", chatProvider),

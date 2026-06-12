@@ -1,5 +1,7 @@
 import * as fs from "fs";
 import * as vscode from "vscode";
+import { ProviderConfigService } from "../services/ProviderConfigService";
+import { ProviderId } from "../types/provider";
 import { reviewFunctionStream, submitFeedback, type ReviewResponse } from "../utils/api";
 import { StatusBarManager } from "../managers/StatusBarManager";
 import { DecorationManager } from "../managers/DecorationManager";
@@ -21,6 +23,7 @@ export class SecondarySidebarProvider implements vscode.WebviewViewProvider {
     private readonly _repoPath: string,
     private readonly _statusBar: StatusBarManager,
     private readonly _decorationManager: DecorationManager,
+    private readonly _providerConfig: ProviderConfigService,
   ) {}
 
   public get isVisible(): boolean {
@@ -78,19 +81,84 @@ export class SecondarySidebarProvider implements vscode.WebviewViewProvider {
     webviewView.webview.html = this._getHtml(webviewView.webview);
 
     webviewView.webview.onDidReceiveMessage(async (data) => {
+      const webview = webviewView.webview;
+
       if (data.type === "webviewReady") {
         this._webviewReady = true;
 
-        if(currentReview) {
-          webviewView.webview.postMessage({
-            type: "restoreSession", 
+        const onboardingComplete =
+          await this._providerConfig.isOnboardingComplete();
+        webview.postMessage({ type: "init", onboardingComplete });
+
+        if (currentReview) {
+          webview.postMessage({
+            type: "restoreSession",
             payload: {
               review: currentReview,
-              messages: conversation, 
-            }
-          })
+              messages: conversation,
+            },
+          });
         }
         this._flushPendingMessages();
+        return;
+      }
+
+      if (data.requestId) {
+        if (data.type === "saveProvider") {
+          try {
+            await this._providerConfig.saveConfig(
+              {
+                provider: data.provider as ProviderId,
+                model: String(data.model ?? ""),
+                baseUrl: data.baseUrl ? String(data.baseUrl) : undefined,
+              },
+              data.apiKey ? String(data.apiKey) : undefined,
+            );
+            webview.postMessage({
+              type: "response",
+              requestId: data.requestId,
+              payload: { ok: true },
+            });
+          } catch (e: unknown) {
+            const message = e instanceof Error ? e.message : String(e);
+            webview.postMessage({
+              type: "response",
+              requestId: data.requestId,
+              error: message,
+            });
+          }
+          return;
+        }
+
+        if (data.type === "testProvider") {
+          try {
+            const baseUrl = String(data.baseUrl ?? "http://127.0.0.1:11434").replace(
+              /\/$/,
+              "",
+            );
+            const response = await fetch(`${baseUrl}/api/tags`);
+            if (!response.ok) {
+              throw new Error(`HTTP ${response.status}`);
+            }
+            webview.postMessage({
+              type: "response",
+              requestId: data.requestId,
+              payload: { ok: true },
+            });
+          } catch (e: unknown) {
+            const message = e instanceof Error ? e.message : String(e);
+            webview.postMessage({
+              type: "response",
+              requestId: data.requestId,
+              payload: { ok: false, error: message },
+            });
+          }
+          return;
+        }
+      }
+
+      if (data.type === "openExternal" && data.url) {
+        await vscode.env.openExternal(vscode.Uri.parse(String(data.url)));
         return;
       }
 
@@ -294,12 +362,17 @@ export class SecondarySidebarProvider implements vscode.WebviewViewProvider {
     );
     const template = fs.readFileSync(htmlPath.fsPath, "utf8");
     const nonce = getNonce();
+    const onboardingComplete = this._providerConfig.isOnboardingCompleteSync();
+    const chatHidden = onboardingComplete ? "" : "hidden";
+    const onboardingHidden = onboardingComplete ? "hidden" : "";
 
     return template
       .replace(/\{\{cspSource\}\}/g, webview.cspSource)
       .replace(/\{\{nonce\}\}/g, nonce)
       .replace(/\{\{styleUri\}\}/g, styleUri.toString())
-      .replace(/\{\{scriptUri\}\}/g, scriptUri.toString());
+      .replace(/\{\{scriptUri\}\}/g, scriptUri.toString())
+      .replace(/\{\{chatHidden\}\}/g, chatHidden)
+      .replace(/\{\{onboardingHidden\}\}/g, onboardingHidden);
   }
 }
 

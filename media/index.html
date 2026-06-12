@@ -9,7 +9,7 @@
   <link href="{{styleUri}}" rel="stylesheet">
 </head>
 <body>
-  <div id="reviewSection">
+  <div id="reviewSection" {{chatHidden}}>
     <div class="review-title-row">
       <span class="status-dot" id="statusDot"></span>
       <span class="review-title">ReviewStack</span>
@@ -26,7 +26,11 @@
     <div id="reviewContent"></div>
   </div>
 
-  <div id="messagesContainer" class="messages-container" role="log" aria-live="polite">
+  <div id="onboardingRoot" class="onboarding-root" {{onboardingHidden}}>
+    <div id="onboardingStep"></div>
+  </div>
+
+  <div id="messagesContainer" class="messages-container" role="log" aria-live="polite" {{chatHidden}}>
     <div id="emptyState" class="chat-empty-state">
       <div class="empty-state-icon" aria-hidden="true">⚇</div>
       <h2 class="empty-state-title">Hi, how can I help you today?</h2>
@@ -38,7 +42,7 @@
     <ul id="messages" class="messages"></ul>
   </div>
 
-  <div class="prompt-composer" id="promptComposer">
+  <div class="prompt-composer" id="promptComposer" {{chatHidden}}>
     <div class="prompt-shell">
       <textarea
         id="input"
