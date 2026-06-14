@@ -8,6 +8,8 @@ import { ReviewState } from "./state/ReviewState";
 import { VSCodeService } from "./services/VSCodeService";
 import { StatusBarUI } from "./ui/StatusBarUI";
 import { ContextPanel } from "./ui/ContextPanel";
+import { ModelSelectorBar } from "./ui/ModelSelectorBar";
+import type { ProviderConfig } from "../types/provider";
 
 function requireEl<T extends HTMLElement>(el: T | null, id: string): T {
   if (!el) {
@@ -30,9 +32,17 @@ const sendButtonEl = requireEl(
   document.getElementById("send") as HTMLButtonElement | null,
   "send",
 );
+const stopButtonEl = requireEl(
+  document.getElementById("stop") as HTMLButtonElement | null,
+  "stop",
+);
 const promptComposerEl = requireEl(
   document.getElementById("promptComposer"),
   "promptComposer",
+);
+const modelSelectEl = requireEl(
+  document.getElementById("modelSelect") as HTMLSelectElement | null,
+  "modelSelect",
 );
 const fileInfoEl = requireEl(document.getElementById("fileInfo"), "fileInfo");
 const filePathEl = requireEl(document.getElementById("filePath"), "filePath");
@@ -52,10 +62,7 @@ const contextFileListEl = requireEl(
 );
 const statusDotEl = requireEl(document.getElementById("statusDot"), "statusDot");
 const reviewStateEl = requireEl(document.getElementById("reviewState"), "reviewState");
-const reviewSectionEl = requireEl(
-  document.getElementById("reviewSection"),
-  "reviewSection",
-);
+const chatRootEl = requireEl(document.getElementById("chatRoot"), "chatRoot");
 const onboardingRootEl = requireEl(
   document.getElementById("onboardingRoot"),
   "onboardingRoot",
@@ -68,24 +75,44 @@ const onboardingStepEl = requireEl(
 const vscodeService = new VSCodeService();
 let chatMounted = false;
 let onboardingMounted = false;
+let modelSelector: ModelSelectorBar | null = null;
 
 function setChatVisible(visible: boolean): void {
-  reviewSectionEl.hidden = !visible;
-  messagesContainerEl.hidden = !visible;
-  promptComposerEl.hidden = !visible;
+  chatRootEl.hidden = !visible;
+  onboardingRootEl.hidden = visible;
+}
+
+function openProviderSetup(config: ProviderConfig): void {
+  setChatVisible(false);
+  onboardingMounted = true;
+
+  new OnboardingController(
+    onboardingStepEl,
+    onboardingRootEl,
+    vscodeService,
+    () => {
+      onboardingMounted = false;
+      setChatVisible(true);
+      void modelSelector?.refresh();
+    },
+  ).startAt("setup", config.provider, {
+    model: config.model,
+    baseUrl: config.baseUrl,
+  });
 }
 
 function mountChatApp(): void {
   if (chatMounted) {
+    setChatVisible(true);
+    void modelSelector?.refresh();
     return;
   }
   chatMounted = true;
-  onboardingRootEl.hidden = true;
   setChatVisible(true);
 
   const reviewState = new ReviewState();
   const chatManager = new ChatManager(messagesEl, messagesContainerEl, emptyStateEl);
-  const loadingManager = new LoadingManager(messagesEl);
+  const loadingManager = new LoadingManager(messagesEl, messagesContainerEl);
   const statusBar = new StatusBarUI(statusDotEl, reviewStateEl);
   const reviewHeader = new ReviewHeader(
     fileInfoEl,
@@ -103,8 +130,10 @@ function mountChatApp(): void {
   const reviewPanel = new ReviewPanel({
     inputEl,
     sendButtonEl,
+    stopButtonEl,
     promptComposerEl,
     chatManager,
+    loadingManager,
     vscodeService,
     reviewState,
   });
@@ -120,6 +149,10 @@ function mountChatApp(): void {
     vscodeService,
   );
 
+  modelSelector = new ModelSelectorBar(modelSelectEl, vscodeService, openProviderSetup);
+  modelSelector.bind();
+  void modelSelector.refresh();
+
   window.addEventListener("message", (e) => handler.handle(e));
 }
 
@@ -129,7 +162,6 @@ function mountOnboarding(): void {
   }
   onboardingMounted = true;
   setChatVisible(false);
-  onboardingRootEl.hidden = false;
 
   new OnboardingController(
     onboardingStepEl,
@@ -143,7 +175,7 @@ function mountOnboarding(): void {
 }
 
 function boot(): void {
-  if (onboardingRootEl.hidden) {
+  if (!chatRootEl.hidden) {
     mountChatApp();
     return;
   }

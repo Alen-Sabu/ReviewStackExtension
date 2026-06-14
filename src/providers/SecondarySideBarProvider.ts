@@ -3,6 +3,7 @@ import * as vscode from "vscode";
 import { ProviderConfigService } from "../services/ProviderConfigService";
 import { ProviderId } from "../types/provider";
 import { reviewFunctionStream, submitFeedback, type ReviewResponse } from "../utils/api";
+import { CONFIG } from "../utils/config";
 import { StatusBarManager } from "../managers/StatusBarManager";
 import { DecorationManager } from "../managers/DecorationManager";
 
@@ -13,10 +14,18 @@ let currentReview: {
   language: string;
 } | null = null;
 
+function isAbortError(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    (error.name === "AbortError" || error.message === "Aborted")
+  );
+}
+
 export class SecondarySidebarProvider implements vscode.WebviewViewProvider {
   _view?: vscode.WebviewView;
   private _webviewReady = false;
   private _pendingMessages: unknown[] = [];
+  private _activeAbortController: AbortController | null = null;
 
   constructor(
     private readonly _extensionUri: vscode.Uri,
@@ -88,7 +97,7 @@ export class SecondarySidebarProvider implements vscode.WebviewViewProvider {
 
         const onboardingComplete =
           await this._providerConfig.isOnboardingComplete();
-        webview.postMessage({ type: "init", onboardingComplete });
+        webview.postMessage({ type: "init", onboardingComplete});
 
         if (currentReview) {
           webview.postMessage({
@@ -104,6 +113,16 @@ export class SecondarySidebarProvider implements vscode.WebviewViewProvider {
       }
 
       if (data.requestId) {
+        if (data.type === "getProviderConfig") {
+          const config = await this._providerConfig.getConfig();
+          webview.postMessage({
+            type: "response",
+            requestId: data.requestId,
+            payload: config,
+          });
+          return;
+        }
+
         if (data.type === "saveProvider") {
           try {
             await this._providerConfig.saveConfig(
@@ -132,18 +151,24 @@ export class SecondarySidebarProvider implements vscode.WebviewViewProvider {
 
         if (data.type === "testProvider") {
           try {
-            const baseUrl = String(data.baseUrl ?? "http://127.0.0.1:11434").replace(
-              /\/$/,
-              "",
-            );
-            const response = await fetch(`${baseUrl}/api/tags`);
-            if (!response.ok) {
-              throw new Error(`HTTP ${response.status}`);
-            }
+            const response = await fetch(`${CONFIG.serverUrl}/settings/test`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                provider: data.provider,
+                model: data.model,
+                api_key: data.apiKey,
+                base_url: data.baseUrl,
+              }),
+            });
+            const result = (await response.json()) as {
+              ok: boolean;
+              error?: string;
+            };
             webview.postMessage({
               type: "response",
               requestId: data.requestId,
-              payload: { ok: true },
+              payload: result,
             });
           } catch (e: unknown) {
             const message = e instanceof Error ? e.message : String(e);
@@ -159,6 +184,11 @@ export class SecondarySidebarProvider implements vscode.WebviewViewProvider {
 
       if (data.type === "openExternal" && data.url) {
         await vscode.env.openExternal(vscode.Uri.parse(String(data.url)));
+        return;
+      }
+
+      if (data.type === "stopGeneration") {
+        this._activeAbortController?.abort();
         return;
       }
 
@@ -188,6 +218,9 @@ export class SecondarySidebarProvider implements vscode.WebviewViewProvider {
 
           this._statusBar.setReady();
         } catch (e: unknown) {
+          if (isAbortError(e)) {
+            return;
+          }
           const message = e instanceof Error ? e.message : String(e);
           webviewView.webview.postMessage({ type: "loading", value: false });
           webviewView.webview.postMessage({
@@ -266,6 +299,9 @@ export class SecondarySidebarProvider implements vscode.WebviewViewProvider {
             }
           }
         } catch (e: unknown) {
+          if (isAbortError(e)) {
+            return;
+          }
           const message = e instanceof Error ? e.message : String(e);
           webviewView.webview.postMessage({ type: "loading", value: false });
           webviewView.webview.postMessage({
@@ -312,38 +348,73 @@ export class SecondarySidebarProvider implements vscode.WebviewViewProvider {
       user_reply?: string;
     },
   ): Promise<ReviewResponse> {
-    let streamStarted = false;
+    this._activeAbortController?.abort();
+    const abortController = new AbortController();
+    this._activeAbortController = abortController;
 
-    const result = await reviewFunctionStream(payload, (chunk) => {
-      if (chunk.delta && !streamStarted) {
-        streamStarted = true;
+    let streamStarted = false;
+    let streamedText = "";
+
+    try {
+      const result = await reviewFunctionStream(
+        payload,
+        (chunk) => {
+          if (chunk.delta && !streamStarted) {
+            streamStarted = true;
+            webview.postMessage({ type: "botReplyStart" });
+          }
+          if (chunk.delta) {
+            streamedText += chunk.delta;
+            webview.postMessage({ type: "botReplyChunk", text: chunk.delta });
+          }
+        },
+        abortController.signal,
+      );
+
+      if (!streamStarted) {
         webview.postMessage({ type: "botReplyStart" });
       }
-      if (chunk.delta) {
-        webview.postMessage({ type: "botReplyChunk", text: chunk.delta });
+
+      webview.postMessage({ type: "botReplyEnd" });
+      webview.postMessage({ type: "loading", value: false });
+
+      const files = result.retrieved_context ?? [];
+      if (files.length > 0 || result.context_limit_hit) {
+        webview.postMessage({
+          type: "contextInfo",
+          payload: {
+            files,
+            limitHit: result.context_limit_hit ?? false,
+            candidatesConsidered: result.candidates_considered ?? 0,
+          },
+        });
       }
-    });
 
-    if (!streamStarted) {
-      webview.postMessage({ type: "botReplyStart" });
+      return result;
+    } catch (error: unknown) {
+      if (isAbortError(error)) {
+        webview.postMessage({ type: "loading", value: false });
+        if (streamStarted) {
+          webview.postMessage({ type: "botReplyEnd" });
+        }
+
+        if (payload.user_reply) {
+          conversation.push({ role: "user", content: payload.user_reply });
+        }
+        if (streamedText) {
+          conversation.push({ role: "assistant", content: streamedText });
+        }
+
+        this._statusBar.setReady();
+        throw error;
+      }
+
+      throw error;
+    } finally {
+      if (this._activeAbortController === abortController) {
+        this._activeAbortController = null;
+      }
     }
-
-    webview.postMessage({ type: "botReplyEnd" });
-    webview.postMessage({ type: "loading", value: false });
-
-    const files = result.retrieved_context ?? [];
-    if (files.length > 0 || result.context_limit_hit) {
-      webview.postMessage({
-        type: "contextInfo",
-        payload: {
-          files,
-          limitHit: result.context_limit_hit ?? false,
-          candidatesConsidered: result.candidates_considered ?? 0,
-        },
-      });
-    }
-
-    return result;
   }
 
   private _getHtml(webview: vscode.Webview): string {

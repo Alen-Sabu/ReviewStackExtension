@@ -1,4 +1,5 @@
 import { ChatManager } from "./ChatManager";
+import { LoadingManager } from "./Loading";
 import { ReviewState } from "../state/ReviewState";
 import { VSCodeService } from "../services/VSCodeService";
 
@@ -7,8 +8,10 @@ const MAX_INPUT_HEIGHT = 120;
 type ReviewPanelOptions = {
   inputEl: HTMLTextAreaElement;
   sendButtonEl: HTMLButtonElement;
+  stopButtonEl: HTMLButtonElement;
   promptComposerEl: HTMLElement;
   chatManager: ChatManager;
+  loadingManager: LoadingManager;
   vscodeService: VSCodeService;
   reviewState: ReviewState;
 };
@@ -36,7 +39,7 @@ export class ReviewPanel {
   }
 
   private bindEvents(): void {
-    const { inputEl, sendButtonEl, chatManager, vscodeService, reviewState } =
+    const { inputEl, sendButtonEl, stopButtonEl, chatManager, vscodeService, reviewState } =
       this.options;
 
     const sendCurrentMessage = () => {
@@ -50,12 +53,22 @@ export class ReviewPanel {
       }
 
       chatManager.addMessage(text, "user");
+      this.options.loadingManager.show();
+      reviewState.setLoading(true);
+      this.syncControls(true);
       vscodeService.send("userMessage", { text });
       inputEl.value = "";
       this.resizeInput();
     };
 
     sendButtonEl.addEventListener("click", sendCurrentMessage);
+
+    stopButtonEl.addEventListener("click", () => {
+      if (!reviewState.isLoading) {
+        return;
+      }
+      vscodeService.send("stopGeneration");
+    });
 
     inputEl.addEventListener("keydown", (event) => {
       if (event.key === "Enter" && !event.shiftKey) {
@@ -80,6 +93,9 @@ export class ReviewPanel {
 
     this.options.inputEl.disabled = !enabled;
     this.options.sendButtonEl.disabled = !enabled;
+    this.options.stopButtonEl.hidden = !isLoading;
+    this.options.stopButtonEl.disabled = !isLoading;
     this.options.promptComposerEl.classList.toggle("is-disabled", !enabled);
+    this.options.promptComposerEl.classList.toggle("is-loading", isLoading);
   }
 }

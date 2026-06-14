@@ -1,79 +1,46 @@
-# reviewstack README
+# ReviewStack VS Code Extension
 
-This is the README for your extension "reviewstack". After writing up a brief description, we recommend including the following sections.
+This is the frontend for the ReviewStack VS Code extension. It provides a user interface for interacting with the AI-powered features of ReviewStack.
 
 ## Features
 
-Describe specific features of your extension including screenshots of your extension in action. Image paths are relative to this README file.
+- **Code Review**: Get AI-powered feedback on your code.
+- **Chat Interface**: Interact with the AI agent through a chat interface.
+- **Code Lens**: See suggestions and insights directly in your code.
+- **Sidebar**: A dedicated sidebar for ReviewStack.
 
-For example if there is an image subfolder under your extension project workspace:
+## Project Structure
 
-\!\[feature X\]\(images/feature-x.png\)
+- `src/extension.ts`: The main entry point for the extension.
+- `src/webview/`: Contains the code for the webview UI.
+- `src/managers/`: Contains managers for different parts of the extension, like the status bar and decorations.
+- `src/providers/`: Contains providers for features like CodeLens and the sidebar.
+- `src/services/`: Contains services for interacting with the backend and VS Code APIs.
+- `media/`: Contains static assets like icons and stylesheets.
 
-> Tip: Many popular extensions utilize animations. This is an excellent way to show off your extension! We recommend short, focused animations that are easy to follow.
+## Getting Started
 
-## Requirements
+### Prerequisites
 
-ReviewStack now uses a local Ollama model instead of Anthropic, so reviews run without a paid API key.
+- Node.js 16+
+- npm
 
-Install Ollama, pull a model, and then start the backend. You can override the defaults with:
+### Installation
 
-* `OLLAMA_BASE_URL` - defaults to `http://127.0.0.1:11434`
-* `OLLAMA_MODEL` - defaults to `qwen2.5-coder:7b`
-* `OLLAMA_TIMEOUT_SECONDS` - defaults to `300`
+1.  Clone the repository.
+2.  Navigate to the `reviewstack` directory.
+3.  Install the dependencies:
 
-The Python backend dependencies live in [reviewstack_backend/requirements.txt](reviewstack_backend/requirements.txt).
+    ```bash
+    npm install
+    ```
 
-## Extension Settings
+### Running the extension
 
-Include if your extension adds any VS Code settings through the `contributes.configuration` extension point.
+1.  Open the `reviewstack` directory in VS Code.
+2.  Press `F5` to start a new VS Code window with the extension running.
 
-For example:
+## Contributing
 
-This extension contributes the following settings:
+Contributions are welcome! Please open an issue or submit a pull request.
 
-* `myExtension.enable`: Enable/disable this extension.
-* `myExtension.thing`: Set to `blah` to do something.
-
-## Known Issues
-
-Calling out known issues can help limit users opening duplicate issues against your extension.
-
-## Release Notes
-
-Users appreciate release notes as you update your extension.
-
-### 1.0.0
-
-Initial release of ...
-
-### 1.0.1
-
-Fixed issue #.
-
-### 1.1.0
-
-Added features X, Y, and Z.
-
----
-
-## Following extension guidelines
-
-Ensure that you've read through the extensions guidelines and follow the best practices for creating your extension.
-
-* [Extension Guidelines](https://code.visualstudio.com/api/references/extension-guidelines)
-
-## Working with Markdown
-
-You can author your README using Visual Studio Code. Here are some useful editor keyboard shortcuts:
-
-* Split the editor (`Cmd+\` on macOS or `Ctrl+\` on Windows and Linux).
-* Toggle preview (`Shift+Cmd+V` on macOS or `Shift+Ctrl+V` on Windows and Linux).
-* Press `Ctrl+Space` (Windows, Linux, macOS) to see a list of Markdown snippets.
-
-## For more information
-
-* [Visual Studio Code's Markdown Support](http://code.visualstudio.com/docs/languages/markdown)
-* [Markdown Syntax Reference](https://help.github.com/articles/markdown-basics/)
-
-**Enjoy!**

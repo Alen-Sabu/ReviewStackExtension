@@ -17,7 +17,7 @@ export type ProviderDefaults = CloudProviderDefaults | OllamaProviderDefaults;
 export const PROVIDER_DEFAULTS: Record<ProviderId, ProviderDefaults> = {
   google: {
     needsApiKey: true,
-    model: "gemini-2.0-flash",
+    model: "gemini-2.5-flash",
     keyUrl: "https://aistudio.google.com/apikey",
   },
   openai: {
@@ -86,6 +86,12 @@ export const PROVIDER_LABELS: Record<ProviderId, string> = {
   ollama: "Ollama (Local)",
 };
 
+export function getDefaultModel(provider: ProviderId): string {
+  return PROVIDER_DEFAULTS[provider].model;
+}
+
 export function needsApiKey(provider: ProviderId): boolean {
   return PROVIDER_DEFAULTS[provider].needsApiKey;
 }
+
+export const ENABLED_PROVIDERS: ProviderId[] = ["ollama", "google"];

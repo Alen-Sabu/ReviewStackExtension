@@ -21,6 +21,20 @@ export class OnboardingController {
     private onComplete: () => void,
   ) {}
 
+  startAt(
+    step: OnboardingStep,
+    provider: ProviderId,
+    initial?: { model?: string; baseUrl?: string },
+  ): void {
+    this.step = step;
+    this.selectedProvider = provider;
+    this.initial = initial;
+    this.rootEl.hidden = false;
+    this.render();
+  }
+
+  private initial?: { model?: string; baseUrl?: string };
+
   start(): void {
     this.rootEl.hidden = false;
     this.render();
@@ -35,6 +49,7 @@ export class OnboardingController {
     } else if (this.step === "pick") {
       ProviderPickStep.render(this.stepEl, (provider) => {
         this.selectedProvider = provider;
+        this.initial = undefined;
         this.step = "setup";
         this.render();
       });
@@ -51,6 +66,7 @@ export class OnboardingController {
           },
         },
         this.vscodeService,
+        this.initial,
       );
     }
   }

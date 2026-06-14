@@ -25,6 +25,10 @@ export class ReviewState {
     this._loading = false;
   }
 
+  setLoading(loading: boolean) {
+    this._loading = loading;
+  }
+
   clear() {
     this._currentReview = null;
     this._loading = false;

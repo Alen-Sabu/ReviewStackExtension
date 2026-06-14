@@ -80,12 +80,14 @@ export async function reviewFunction(payload: ReviewPayload): Promise<ReviewResp
 export async function reviewFunctionStream(
   payload: ReviewPayload,
   onChunk: (chunk: ReviewStreamChunk) => void,
+  signal?: AbortSignal,
 ): Promise<ReviewResponse> {
   const start = performance.now();
   const res = await fetch(`${CONFIG.serverUrl}/review/stream`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
+    signal,
   });
 
   if (!res.ok) {
@@ -104,6 +106,13 @@ export async function reviewFunctionStream(
   let finalChunk: ReviewStreamChunk | null = null;
 
   while (true) {
+    if (signal?.aborted) {
+      await reader.cancel().catch(() => undefined);
+      const err = new Error("Aborted");
+      err.name = "AbortError";
+      throw err;
+    }
+
     const { value, done } = await reader.read();
     if (done) {
       break;

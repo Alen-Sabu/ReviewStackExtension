@@ -27,6 +27,7 @@ export class MessageHandler {
         if (value) {
           this.loadingManager.show();
           this.statusBar.setStatus("reviewing");
+          this.reviewState.setLoading(true);
         } else {
           this.loadingManager.hide();
           this.statusBar.setStatus("ready");
