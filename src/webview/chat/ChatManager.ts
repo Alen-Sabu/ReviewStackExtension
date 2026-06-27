@@ -23,6 +23,52 @@ export class ChatManager {
     this.scrollToBottom();
   }
 
+  addFailedMessage(text: string, onRetry: () => void): void {
+    this.hideWelcome();
+
+    const li = document.createElement("li");
+    li.className = "msg bot failed";
+
+    const bubbleBody = document.createElement("div");
+    bubbleBody.className = "bubble-body markdown-body";
+    bubbleBody.appendChild(renderMessageContent(text));
+
+    const retryBtn = document.createElement("button");
+    retryBtn.type = "button";
+    retryBtn.className = "retry-inline-btn";
+    retryBtn.setAttribute("aria-label", "Retry last review");
+    retryBtn.innerHTML = `
+      <svg class="retry-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <path fill="currentColor" d="M17.65 6.35A7.958 7.958 0 0 0 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08a5.99 5.99 0 0 1-5.65 4c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/>
+      </svg>
+      Retry
+    `;
+    retryBtn.addEventListener("click", () => {
+      retryBtn.disabled = true;
+      onRetry();
+    });
+
+    const retryRow = document.createElement("div");
+    retryRow.className = "message-retry";
+    retryRow.appendChild(retryBtn);
+
+    const bubble = document.createElement("div");
+    bubble.className = "bubble";
+    bubble.append(bubbleBody, retryRow);
+
+    const content = document.createElement("div");
+    content.className = "message-content";
+    content.appendChild(bubble);
+
+    const meta = document.createElement("div");
+    meta.className = "meta";
+    meta.innerHTML = "<div>⚇</div>";
+
+    li.append(content, meta);
+    this.messageEl.appendChild(li);
+    this.scrollToBottom();
+  }
+
   startStreamingMessage(): void {
     this.hideWelcome();
     this.streamingText = "";
@@ -80,6 +126,13 @@ export class ChatManager {
     this.streamingBubbleBody = null;
     this.streamingText = "";
     this.scrollToBottom();
+  }
+
+  cancelStreaming(): void {
+    this.streamingMessageEl?.remove();
+    this.streamingMessageEl = null;
+    this.streamingBubbleBody = null;
+    this.streamingText = "";
   }
 
   clear(options: ClearOptions = {}): void {

@@ -986,3 +986,49 @@ body {
   color: var(--vscode-descriptionForeground);
   text-align: center;
 }
+
+.review-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.msg.bot.failed .bubble {
+  border-color: var(--vscode-inputValidation-errorBorder, #f14c4c);
+}
+
+.message-retry {
+  display: flex;
+  justify-content: flex-start;
+  padding: 8px 12px 10px;
+  border-top: 1px solid var(--vscode-widget-border, var(--vscode-input-border));
+}
+
+.retry-inline-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  font-size: 12px;
+  font-family: var(--vscode-font-family);
+  color: var(--vscode-button-foreground);
+  background: var(--vscode-button-background);
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.retry-inline-btn:hover:not(:disabled) {
+  background: var(--vscode-button-hoverBackground);
+}
+
+.retry-inline-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.retry-icon {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}

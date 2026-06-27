@@ -20,7 +20,7 @@ export class MessageHandler {
   ) {}
 
   handle(event: MessageEvent): void {
-    const { type, text, payload, value } = event.data;
+    const { type, text, payload, value, error } = event.data;
 
     switch (type) {
       case "loading":
@@ -75,6 +75,7 @@ export class MessageHandler {
         this.statusBar.setStatus("ready");
         this.chatManager.finishStreamingMessage();
         this.reviewState.finishReview();
+        this.reviewState.setCanRetry(false);
         this.reviewPanel.onReviewFinished();
         break;
 
@@ -84,6 +85,14 @@ export class MessageHandler {
 
       case "contextInfo":
         this.contextPanel.display(payload as ContextInfoPayload);
+        break;
+
+      case "streamCancel": 
+        this.chatManager.cancelStreaming();
+        break;
+
+      case "reviewFailed":
+        this.onReviewFailed(String(error ?? "Review failed."));
         break;
     }
   }
@@ -101,5 +110,22 @@ export class MessageHandler {
     this.loadingManager.show();
     this.reviewPanel.onReviewStarted();
     this.vscodeService.send("startReview", { payload });
+  }
+
+  private onReviewFailed(message: string): void {
+    this.loadingManager.hide();
+    this.chatManager.cancelStreaming();
+    this.reviewState.finishReview();
+    this.reviewState.setCanRetry(true);
+    this.statusBar.setStatus("ready");
+    this.reviewPanel.onReviewFinished();
+
+    this.chatManager.addFailedMessage(`Review failed: ${message}`, () => {
+      if (!this.reviewState.canRetry || this.reviewState.isLoading) {
+        return;
+      }
+      this.reviewState.setCanRetry(false);
+      this.vscodeService.send("retryLastReview");
+    });
   }
 }

@@ -6,6 +6,7 @@ import { extractFunctionAt } from "./utils/extractFunction";
 import { indexRepo } from "./utils/api";
 import { StatusBarManager } from "./managers/StatusBarManager";
 import { DecorationManager } from "./managers/DecorationManager";
+import { ReviewSession } from "./services/ReviewSession";
 
 export function activate(context: vscode.ExtensionContext) {
   // status bar
@@ -35,6 +36,7 @@ export function activate(context: vscode.ExtensionContext) {
     statusBar,
     decorationManager,
     providerConfig,
+    new ReviewSession(),
   );
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider("reviewstackView", chatProvider),

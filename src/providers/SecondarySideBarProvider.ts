@@ -6,6 +6,7 @@ import { reviewFunctionStream, submitFeedback, type ReviewResponse } from "../ut
 import { CONFIG } from "../utils/config";
 import { StatusBarManager } from "../managers/StatusBarManager";
 import { DecorationManager } from "../managers/DecorationManager";
+import { ReviewSession } from "../services/ReviewSession";
 
 let conversation: { role: string; content: string }[] = [];
 let currentReview: {
@@ -33,6 +34,7 @@ export class SecondarySidebarProvider implements vscode.WebviewViewProvider {
     private readonly _statusBar: StatusBarManager,
     private readonly _decorationManager: DecorationManager,
     private readonly _providerConfig: ProviderConfigService,
+    private readonly _reviewSession: ReviewSession,
   ) {}
 
   public get isVisible(): boolean {
@@ -201,115 +203,18 @@ export class SecondarySidebarProvider implements vscode.WebviewViewProvider {
           return;
         }
 
-        try {
-          webviewView.webview.postMessage({ type: "loading", value: true });
-
-          const result = await this._runReviewStream(webviewView.webview, {
-            repo_path: this._repoPath,
-            file_path: currentReview.filePath,
-            function_code: currentReview.functionCode,
-            language: currentReview.language,
-            conversation,
-            user_reply: data.text,
-          });
-
-          conversation.push({ role: "user", content: data.text });
-          conversation.push({ role: "assistant", content: result.message });
-
-          this._statusBar.setReady();
-        } catch (e: unknown) {
-          if (isAbortError(e)) {
-            return;
-          }
-          const message = e instanceof Error ? e.message : String(e);
-          webviewView.webview.postMessage({ type: "loading", value: false });
-          webviewView.webview.postMessage({
-            type: "botReply",
-            text: `Error: ${message}`,
-          });
-          this._statusBar.setError(message);
-        }
+        await this._handleUserMessage(webviewView.webview, data.text);
+        return;
       }
 
       if (data.type === "startReview") {
-        conversation = [];
-        currentReview = {
-          filePath: data.payload.filePath,
-          functionCode: data.payload.code,
-          language: data.payload.language,
-        };
+        await this._handleStartReview(webviewView.webview, data.payload);
+        return;
+      }
 
-        const prevEditor = vscode.window.visibleTextEditors.find(
-          (e) => e.document.uri.fsPath === currentReview!.filePath,
-        );
-        if (prevEditor) {
-          this._decorationManager.clear(prevEditor);
-        }
-
-        try {
-          webviewView.webview.postMessage({ type: "loading", value: true });
-
-          const result = await this._runReviewStream(webviewView.webview, {
-            repo_path: this._repoPath,
-            file_path: currentReview.filePath,
-            function_code: currentReview.functionCode,
-            language: currentReview.language,
-            conversation: [],
-          });
-
-          conversation.push({ role: "assistant", content: result.message });
-
-          this._statusBar.setReady();
-
-          const hasIssues =
-            result.message.includes("⚠️") ||
-            result.message.toLowerCase().includes("issue") ||
-            result.message.toLowerCase().includes("problem") ||
-            result.message.toLowerCase().includes("fix");
-
-          const reviewedEditor = vscode.window.visibleTextEditors.find(
-            (e) => e.document.uri.fsPath === currentReview!.filePath,
-          );
-
-          if (reviewedEditor) {
-            const docLines = reviewedEditor.document.getText().split("\n");
-            const fnFirstLine = currentReview!.functionCode
-              .split("\n")[0]
-              .trim();
-            const startLine = docLines.findIndex(
-              (l) => l.trim() === fnFirstLine,
-            );
-            const endLine =
-              startLine !== -1
-                ? startLine + currentReview!.functionCode.split("\n").length - 1
-                : -1;
-
-            if (startLine !== -1) {
-              hasIssues
-                ? this._decorationManager.markHasIssues(
-                    reviewedEditor,
-                    startLine,
-                    endLine,
-                  )
-                : this._decorationManager.markClean(
-                    reviewedEditor,
-                    startLine,
-                    endLine,
-                  );
-            }
-          }
-        } catch (e: unknown) {
-          if (isAbortError(e)) {
-            return;
-          }
-          const message = e instanceof Error ? e.message : String(e);
-          webviewView.webview.postMessage({ type: "loading", value: false });
-          webviewView.webview.postMessage({
-            type: "botReply",
-            text: ` ${message}`,
-          });
-          this._statusBar.setError(message);
-        }
+      if (data.type === "retryLastReview") {
+        await this._handleRetry(webviewView.webview);
+        return;
       }
 
       if (data.type === "feedback") {
@@ -409,6 +314,10 @@ export class SecondarySidebarProvider implements vscode.WebviewViewProvider {
         throw error;
       }
 
+      if(streamStarted) {
+        webview.postMessage({ type: "streamCancel" });
+      }
+      this._postReviewFailed(webview, error); 
       throw error;
     } finally {
       if (this._activeAbortController === abortController) {
@@ -445,6 +354,144 @@ export class SecondarySidebarProvider implements vscode.WebviewViewProvider {
       .replace(/\{\{chatHidden\}\}/g, chatHidden)
       .replace(/\{\{onboardingHidden\}\}/g, onboardingHidden);
   }
+
+  // review failed message to the webview
+  private _postReviewFailed(webview: vscode.Webview, error: unknown): void {
+    const message = error instanceof Error ? error.message : String(error);
+    webview.postMessage({ type: "loading", value: false });
+    webview.postMessage({ type: "reviewFailed", error: message }); 
+    this._statusBar.setError(message);
+  }
+
+  // handle start review request
+  private async _handleStartReview(webview: vscode.Webview, payload: {
+    filePath: string;
+    code: string;
+    language: string;
+  }): Promise<void> {
+    this._reviewSession.setLastRequest({ kind: "startReview", payload });
+
+    conversation = [];
+    currentReview = {
+      filePath: payload.filePath,
+      functionCode: payload.code,
+      language: payload.language,
+    };
+
+    const prevEditor = vscode.window.visibleTextEditors.find(
+      (e) => e.document.uri.fsPath === currentReview!.filePath,
+    );
+    if(prevEditor) {
+      this._decorationManager.clear(prevEditor);
+    }
+
+    try {
+      webview.postMessage({ type: "loading", value: true }); 
+      
+      const result = await this._runReviewStream(webview, {
+        repo_path: this._repoPath,
+        file_path: currentReview.filePath,
+        function_code: currentReview.functionCode,
+        language: currentReview.language,
+        conversation: [],
+      })
+
+      conversation.push({ role: "assistant", content: result.message }); 
+      this._statusBar.setReady();
+      this._applyDecoration(result.message)
+    } catch (e: unknown) {
+      if (isAbortError(e)) {
+        return;
+      }
+
+    }
+  }
+
+  // apply decoration to the editor based on the message
+  private _applyDecoration(message: string): void {
+    if(!currentReview) {
+      return;
+    }
+
+    const hasIssues = message.toLowerCase().includes("issue") ||
+                      message.toLowerCase().includes("problem") ||
+                      message.toLowerCase().includes("fix");
+
+    const reviewedEditor = vscode.window.visibleTextEditors.find(
+      (e) => e.document.uri.fsPath === currentReview!.filePath,
+    );
+
+    if(!reviewedEditor) {
+      return;
+    }
+
+    const docLines = reviewedEditor.document.getText().split("\n");
+    const fnFirstLine = currentReview.functionCode.split("\n")[0].trim();
+    const startLine = docLines.findIndex((l) => l.trim() === fnFirstLine);
+    const endLine =
+      startLine !== -1
+        ? startLine + currentReview.functionCode.split("\n").length - 1
+        : -1;
+
+    if(hasIssues) {
+      this._decorationManager.markHasIssues(reviewedEditor, startLine, endLine);
+    } else {
+      this._decorationManager.markClean(reviewedEditor, startLine, endLine);
+    }
+
+  }
+
+  // handle user message request
+  private async _handleUserMessage(webview: vscode.Webview, text: string): Promise<void> {
+    if(!currentReview) {
+      return;
+    }
+
+    this._reviewSession.setLastRequest({ kind: "userMessage", text });
+
+    try {
+      webview.postMessage({ type: "loading", value: true });
+
+      const result = await this._runReviewStream(webview, {
+        repo_path: this._repoPath,
+        file_path: currentReview.filePath,
+        function_code: currentReview.functionCode,
+        language: currentReview.language,
+        conversation: [...conversation, { role: "user", content: text }],
+        user_reply: text,
+      })
+
+      conversation.push({ role: "user", content: text });
+      conversation.push({ role: "assistant", content: result.message });
+      this._statusBar.setReady();
+    
+    } catch (e: unknown) {
+      if (isAbortError(e)) {
+        return;
+      }
+
+    }
+  }
+
+  // handle retry review 
+  private async _handleRetry(webview: vscode.Webview): Promise<void> {
+    const last = this._reviewSession.getLastRequest(); 
+    if(!last) {
+      return;
+    }
+
+    if(last.kind === "startReview") {
+      webview.postMessage({
+        type: "reviewFunction", 
+        payload: last.payload,
+      })
+    } else {
+      await this._handleUserMessage(webview, last.text);
+    }
+
+    
+  }
+
 }
 
 function getNonce(): string {
