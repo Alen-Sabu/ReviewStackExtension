@@ -1,9 +1,13 @@
 import * as vscode from "vscode";
 import { ProviderConfig, ProviderId } from "../types/provider";
 import { CONFIG } from "../utils/config";
+import { AuthService } from "./AuthService";
 
 export class ProviderConfigService {
-  constructor(private context: vscode.ExtensionContext) {}
+  constructor(
+    private context: vscode.ExtensionContext,
+    private auth: AuthService,
+  ) {}
 
   isOnboardingCompleteSync(): boolean {
     return this.context.globalState.get("reviewstack.onboardingComplete", false);
@@ -11,6 +15,13 @@ export class ProviderConfigService {
 
   async isOnboardingComplete(): Promise<boolean> {
     return this.context.globalState.get("reviewstack.onboardingComplete", false);
+  }
+
+  async resetOnboarding(): Promise<void> {
+    await this.context.globalState.update(
+      "reviewstack.onboardingComplete",
+      false,
+    );
   }
 
   async getConfig(): Promise<ProviderConfig | null> {
@@ -29,7 +40,7 @@ export class ProviderConfigService {
     }
     await this.context.globalState.update("reviewstack.config", config);
     await this.context.globalState.update("reviewstack.onboardingComplete", true);
-    await syncProviderToBackend(config, apiKey);
+    await syncProviderToBackend(this.auth, config, apiKey);
   }
 
   async getApiKey(provider: ProviderId): Promise<string | undefined> {
@@ -38,6 +49,7 @@ export class ProviderConfigService {
 }
 
 async function syncProviderToBackend(
+  auth: AuthService,
   config: ProviderConfig,
   apiKey?: string,
 ): Promise<void> {
@@ -51,7 +63,7 @@ async function syncProviderToBackend(
       body.api_key = apiKey;
     }
 
-    const response = await fetch(`${CONFIG.serverUrl}/settings/provider`, {
+    const response = await auth.authFetch(`${CONFIG.serverUrl}/settings/provider`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),

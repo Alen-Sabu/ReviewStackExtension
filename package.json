@@ -50,6 +50,18 @@
       {
         "command": "reviewstack.dismissLens",
         "title": "ReviewStack: Dismiss"
+      },
+      {
+        "command": "reviewstack.signIn",
+        "title": "ReviewStack: Sign In"
+      },
+      {
+        "command": "reviewstack.signOut",
+        "title": "ReviewStack: Sign Out"
+      },
+      {
+        "command": "reviewstack.resetOnboarding",
+        "title": "ReviewStack: Reset Onboarding"
       }
     ],
     "menus": {

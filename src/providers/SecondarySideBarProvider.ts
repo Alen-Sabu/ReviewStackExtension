@@ -1,12 +1,14 @@
 import * as fs from "fs";
 import * as vscode from "vscode";
+import { ApiClient } from "../api/ApiClient";
 import { ProviderConfigService } from "../services/ProviderConfigService";
 import { ProviderId } from "../types/provider";
-import { reviewFunctionStream, submitFeedback, type ReviewResponse } from "../utils/api";
+import type { ReviewResponse } from "../types/review";
 import { CONFIG } from "../utils/config";
 import { StatusBarManager } from "../managers/StatusBarManager";
 import { DecorationManager } from "../managers/DecorationManager";
 import { ReviewSession } from "../services/ReviewSession";
+import { AuthService } from "../services/AuthService";
 
 let conversation: { role: string; content: string }[] = [];
 let currentReview: {
@@ -35,6 +37,9 @@ export class SecondarySidebarProvider implements vscode.WebviewViewProvider {
     private readonly _decorationManager: DecorationManager,
     private readonly _providerConfig: ProviderConfigService,
     private readonly _reviewSession: ReviewSession,
+    private readonly _auth: AuthService,
+    private readonly _api: ApiClient,
+    private readonly _onSetupComplete: () => void,
   ) {}
 
   public get isVisible(): boolean {
@@ -97,9 +102,12 @@ export class SecondarySidebarProvider implements vscode.WebviewViewProvider {
       if (data.type === "webviewReady") {
         this._webviewReady = true;
 
-        const onboardingComplete =
-          await this._providerConfig.isOnboardingComplete();
-        webview.postMessage({ type: "init", onboardingComplete});
+        const [signedIn, onboardingComplete] = await Promise.all([
+          this._auth.isSignedIn(),
+          this._providerConfig.isOnboardingComplete(),
+        ]);
+
+        webview.postMessage({ type: "init", signedIn, onboardingComplete });
 
         if (currentReview) {
           webview.postMessage({
@@ -112,6 +120,23 @@ export class SecondarySidebarProvider implements vscode.WebviewViewProvider {
         }
         this._flushPendingMessages();
         return;
+      }
+
+      if (data.type === "signIn") {
+        try {
+          await this._auth.signIn(); 
+
+          const onboardingComplete = await this._providerConfig.isOnboardingComplete();
+          webview.postMessage({ type: "authState", signedIn: true, onboardingComplete});
+
+        } catch (error: unknown) {
+          webview.postMessage({
+            type: "authState", 
+            signedIn: false, 
+            error: error instanceof Error ? error.message: String(error), 
+          })
+        }
+        return; 
       }
 
       if (data.requestId) {
@@ -127,6 +152,8 @@ export class SecondarySidebarProvider implements vscode.WebviewViewProvider {
 
         if (data.type === "saveProvider") {
           try {
+            const wasOnboardingComplete =
+              await this._providerConfig.isOnboardingComplete();
             await this._providerConfig.saveConfig(
               {
                 provider: data.provider as ProviderId,
@@ -135,6 +162,9 @@ export class SecondarySidebarProvider implements vscode.WebviewViewProvider {
               },
               data.apiKey ? String(data.apiKey) : undefined,
             );
+            if (!wasOnboardingComplete) {
+              this._onSetupComplete();
+            }
             webview.postMessage({
               type: "response",
               requestId: data.requestId,
@@ -153,7 +183,7 @@ export class SecondarySidebarProvider implements vscode.WebviewViewProvider {
 
         if (data.type === "testProvider") {
           try {
-            const response = await fetch(`${CONFIG.serverUrl}/settings/test`, {
+            const response = await this._auth.authFetch(`${CONFIG.serverUrl}/settings/test`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
@@ -223,7 +253,7 @@ export class SecondarySidebarProvider implements vscode.WebviewViewProvider {
           return;
         }
         try {
-          await submitFeedback({
+          await this._api.submitFeedback({
             repo_path: this._repoPath,
             message_id: String(data.messageId ?? ""),
             value,
@@ -261,7 +291,7 @@ export class SecondarySidebarProvider implements vscode.WebviewViewProvider {
     let streamedText = "";
 
     try {
-      const result = await reviewFunctionStream(
+      const result = await this._api.reviewFunctionStream(
         payload,
         (chunk) => {
           if (chunk.delta && !streamStarted) {
@@ -342,17 +372,14 @@ export class SecondarySidebarProvider implements vscode.WebviewViewProvider {
     );
     const template = fs.readFileSync(htmlPath.fsPath, "utf8");
     const nonce = getNonce();
-    const onboardingComplete = this._providerConfig.isOnboardingCompleteSync();
-    const chatHidden = onboardingComplete ? "" : "hidden";
-    const onboardingHidden = onboardingComplete ? "hidden" : "";
 
     return template
       .replace(/\{\{cspSource\}\}/g, webview.cspSource)
       .replace(/\{\{nonce\}\}/g, nonce)
       .replace(/\{\{styleUri\}\}/g, styleUri.toString())
       .replace(/\{\{scriptUri\}\}/g, scriptUri.toString())
-      .replace(/\{\{chatHidden\}\}/g, chatHidden)
-      .replace(/\{\{onboardingHidden\}\}/g, onboardingHidden);
+      .replace(/\{\{chatHidden\}\}/g, "hidden")
+      .replace(/\{\{onboardingHidden\}\}/g, "");
   }
 
   // review failed message to the webview

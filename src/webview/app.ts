@@ -3,13 +3,15 @@ import { LoadingManager } from "./chat/Loading";
 import { ReviewHeader } from "./chat/ReviewHeader";
 import { ReviewPanel } from "./chat/ReviewPanel";
 import { MessageHandler } from "./handlers/MessageHandler";
-import { OnboardingController } from "./obboarding/OnboardingController";
+import { OnboardingController } from "./onboarding/OnboardingController";
 import { ReviewState } from "./state/ReviewState";
 import { VSCodeService } from "./services/VSCodeService";
 import { StatusBarUI } from "./ui/StatusBarUI";
 import { ContextPanel } from "./ui/ContextPanel";
 import { ModelSelectorBar } from "./ui/ModelSelectorBar";
 import type { ProviderConfig } from "../types/provider";
+import * as SignInStep from "./onboarding/steps/SignInStep";
+import type { AuthStatePayload } from "./onboarding/steps/SignInStep"; 
 
 function requireEl<T extends HTMLElement>(el: T | null, id: string): T {
   if (!el) {
@@ -73,6 +75,7 @@ const onboardingStepEl = requireEl(
 );
 
 const vscodeService = new VSCodeService();
+let signInMounted = false;
 let chatMounted = false;
 let onboardingMounted = false;
 let modelSelector: ModelSelectorBar | null = null;
@@ -174,31 +177,45 @@ function mountOnboarding(): void {
   ).start();
 }
 
-function boot(): void {
-  if (!chatRootEl.hidden) {
-    mountChatApp();
-    return;
+function routeFromAuth(signedIn: boolean, onboardingComplete: boolean): void {
+  if (!signedIn) {
+    mountSignIn(); 
+    return; 
   }
-  mountOnboarding();
+  if (!onboardingComplete) {
+    signInMounted = false; 
+    mountOnboarding(); 
+    return; 
+  }
+  signInMounted = false; 
+  onboardingMounted = false; 
+  mountChatApp(); 
 }
 
-boot();
+function mountSignIn(): void {
+  if(signInMounted) {
+    return;
+  }
+  signInMounted = true; 
+  onboardingMounted = false; 
+  setChatVisible(false); 
+
+  SignInStep.render(onboardingStepEl, vscodeService, {
+    onSignedIn: (state: AuthStatePayload) => {
+      routeFromAuth(true, !!state.onboardingComplete);
+    }
+  })
+}
+
 vscodeService.send("webviewReady");
 
 window.addEventListener("message", (e) => {
-  if (e.data?.type !== "init") {
+  if (e.data?.type === "init") {
+    routeFromAuth(!!e.data.signedIn, !!e.data.onboardingComplete);
     return;
   }
 
-  if (e.data.onboardingComplete) {
-    if (!chatMounted) {
-      onboardingMounted = false;
-      mountChatApp();
-    }
-    return;
-  }
-
-  if (!onboardingMounted) {
-    mountOnboarding();
+  if (e.data?.type === "authState" && e.data.signedIn) {
+    routeFromAuth(true, !!e.data.onboardingComplete);
   }
 });
