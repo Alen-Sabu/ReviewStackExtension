@@ -1,104 +1,37 @@
-import * as vscode from "vscode";
-import { ApiClient } from "../api/ApiClient";
+import * as vscode from "vscode"; 
 import { registerCommands } from "../commands/registerCommands";
-import { registerListeners } from "../listeners/registerListeners";
-import { DecorationManager } from "../managers/DecorationManager";
-import { StatusBarManager } from "../managers/StatusBarManager";
-import { ReviewCodeLensProvider } from "../providers/CodeLensProvider";
-import { registerProviders } from "../providers/registerProviders";
-import { SecondarySidebarProvider } from "../providers/SecondarySideBarProvider";
-import { AuthService } from "../services/AuthService";
-import { IndexingService } from "../services/IndexingService";
-import { ProviderConfigService } from "../services/ProviderConfigService";
-import { ReviewSession } from "../services/ReviewSession";
-import { StartupOrchestrator } from "../services/StartupOrchestrator";
+import { ReviewStore } from "../store/ReviewStore";
+import { DiffService } from "../git/DiffService";
 
 export class ExtensionBootstrap implements vscode.Disposable {
-  private started = false;
+  private started = false; 
+  
+  private constructor(private readonly context: vscode.ExtensionContext) {}
 
-  private constructor(
-    private readonly context: vscode.ExtensionContext,
-    private readonly statusBar: StatusBarManager,
-    private readonly decorationManager: DecorationManager,
-    private readonly auth: AuthService,
-    private readonly api: ApiClient,
-    private readonly providerConfig: ProviderConfigService,
-    private readonly indexing: IndexingService,
-    private readonly startup: StartupOrchestrator,
-  ) {}
-
-  static create(context: vscode.ExtensionContext): ExtensionBootstrap {
-    const repoPath =
-      vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? "";
-    const statusBar = new StatusBarManager();
-    const decorationManager = new DecorationManager();
-    const auth = new AuthService(context);
-    const api = new ApiClient(auth);
-    const providerConfig = new ProviderConfigService(context, auth);
-    const indexing = new IndexingService(
-      repoPath,
-      api,
-      statusBar,
-      auth,
-      providerConfig,
-    );
-    const startup = new StartupOrchestrator(
-      auth,
-      providerConfig,
-      indexing,
-      statusBar,
-    );
-
-    return new ExtensionBootstrap(
-      context,
-      statusBar,
-      decorationManager,
-      auth,
-      api,
-      providerConfig,
-      indexing,
-      startup,
-    );
+  static create(context: vscode.ExtensionContext) : ExtensionBootstrap{
+    return new ExtensionBootstrap(context);
   }
 
   start(): void {
-    if (this.started) {
-      return;
+    if (this.started) return; 
+    this.started = true; 
+
+    const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath; 
+    if(!root) {
+      void vscode.window.showWarningMessage(
+        "Open a folder to use ReviewStack"
+      ); 
+      return; 
     }
-    this.started = true;
 
-    const repoPath =
-      vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? "";
-    const codeLensProvider = new ReviewCodeLensProvider();
-    const sidebar = new SecondarySidebarProvider(
-      this.context.extensionUri,
-      repoPath,
-      this.statusBar,
-      this.decorationManager,
-      this.providerConfig,
-      new ReviewSession(),
-      this.auth,
-      this.api,
-      () => this.indexing.start(),
-    );
+    const store = new ReviewStore(root); 
+    const diff = new DiffService(root); 
 
-    this.context.subscriptions.push(
-      ...registerProviders(sidebar, codeLensProvider),
-      ...registerCommands({
-        auth: this.auth,
-        sidebar,
-        startup: this.startup,
-        statusBar: this.statusBar,
-        providerConfig: this.providerConfig,
-      }),
-      ...registerListeners(codeLensProvider, this.indexing),
-    );
+    void store.ensureInitialized(); 
+    this.context.subscriptions.push(...registerCommands(store, diff)); 
 
-    void this.startup.run();
+    void vscode.window.showInformationMessage("ReviewStack extension started");
   }
 
-  dispose(): void {
-    this.statusBar.dispose();
-    this.decorationManager.dispose();
-  }
+  dispose() : void{}
 }

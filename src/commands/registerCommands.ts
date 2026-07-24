@@ -1,94 +1,103 @@
-import * as vscode from "vscode";
-import { StatusBarManager } from "../managers/StatusBarManager";
-import { SecondarySidebarProvider } from "../providers/SecondarySideBarProvider";
-import { AuthService } from "../services/AuthService";
-import { ProviderConfigService } from "../services/ProviderConfigService";
-import { StartupOrchestrator } from "../services/StartupOrchestrator";
-import { extractFunctionAt } from "../utils/extractFunction";
+import * as vscode from "vscode"; 
+import { ReviewStore } from "../store/ReviewStore";
+import { DiffService } from "../git/DiffService";
 
-type CommandDependencies = {
-  auth: AuthService;
-  sidebar: SecondarySidebarProvider;
-  startup: StartupOrchestrator;
-  statusBar: StatusBarManager;
-  providerConfig: ProviderConfigService;
-};
-
-export function registerCommands({
-  auth,
-  sidebar,
-  startup,
-  statusBar,
-  providerConfig,
-}: CommandDependencies): vscode.Disposable[] {
+export function registerCommands(
+  store: ReviewStore, 
+  diff: DiffService
+): vscode.Disposable[] {
   return [
-    vscode.commands.registerCommand("reviewstack.signIn", async () => {
-      await auth.signIn();
-      await startup.run();
-    }),
-    vscode.commands.registerCommand("reviewstack.signOut", () => auth.signOut()),
-    vscode.commands.registerCommand("myChat.open", async () => {
-      try {
-        if (sidebar.isVisible) {
-          await vscode.commands.executeCommand(
-            "workbench.action.toggleAuxiliaryBar",
-          );
-        } else {
-          await openSecondarySidebar();
-        }
-      } catch (error) {
-        console.error("Error toggling secondary sidebar", error);
-      }
-    }),
     vscode.commands.registerCommand(
-      "reviewstack.reviewFunction",
-      async (document: vscode.TextDocument, line: number) => {
-        if (!(await auth.isSignedIn())) {
-          if (!sidebar.isVisible) {
-            await openSecondarySidebar();
+      "reviewstack.reviewLastCommit",
+      async () => {
+        try {
+          const commit = await diff.getHeadCommit(); 
+
+          if(await store.hasReview(commit.shortHash)) {
+            void vscode.window.showInformationMessage(`Review for commit ${commit.shortHash} already exists.`);
+            const existing = await store.getReviewUri(commit.shortHash);
+            if(existing) {
+              await vscode.window.showTextDocument(existing);
+            }
+            return;
           }
-          return;
+
+          const commitDiff = await diff.getCommitDiff(commit.commitHash);
+          await store.startReview({
+            commitHash: commit.commitHash, 
+            shortHash: commit.shortHash, 
+            author: commit.author, 
+            date: commit.date, 
+            message: commit.message,  
+          });
+
+          const markdown = [
+            `# Review: ${commit.message}`,
+            "",
+            `**Commit:** \`${commit.shortHash}\``,
+            `**Author:** ${commit.author}`,
+            `**Date:** ${commit.date}`,
+            "",
+            "## Summary",
+            "Git integration works. AI review not connected yet (step 4).",
+            "",
+            "## Changed files",
+            ...commitDiff.files.map((f) => `- \`${f}\``),
+            "",
+            commitDiff.truncated
+              ? "> Diff was truncated for size.\n"
+              : "",
+            "## Diff preview",
+            "```diff",
+            commitDiff.patch.slice(0, 4000),
+            "```",
+            "",
+            "## Security",
+            "_Pending AI_",
+            "",
+            "## Performance",
+            "_Pending AI_",
+            "",
+            "## Bugs",
+            "_Pending AI_",
+            "",
+            "## Suggestions",
+            "_Pending AI_",
+            "",
+            "## Risk",
+            "_Pending AI_",
+          ].join("\n");
+
+          await store.completeReview(commit.shortHash, markdown, {
+            model: "none", 
+            summary: "Git integration placeholder review", 
+          }); 
+
+          const uri = await store.getReviewUri(commit.shortHash); 
+          if(uri) {
+            await vscode.window.showTextDocument(uri);
+          }
+
+          void vscode.window.showInformationMessage(
+            `Saved review for ${commit.shortHash}`, 
+          ); 
+
+        } catch (error: unknown) {
+          const message = error instanceof Error ? error.message : String(error);
+          void vscode.window.showErrorMessage(`Failed to review last commit: ${message}`);
         }
-
-        const functionCode = extractFunctionAt(document, line);
-
-        if (!sidebar.isVisible) {
-          await openSecondarySidebar();
-        }
-
-        statusBar.setReviewing();
-        sidebar.sendMessage({
-          type: "reviewFunction",
-          payload: {
-            code: functionCode,
-            filePath: document.uri.fsPath,
-            language: document.languageId,
-          },
-        });
-      },
+      }
+     
     ),
     vscode.commands.registerCommand(
-      "reviewstack.resetOnboarding",
+      "reviewstack.openReviewsFolder",
       async () => {
-        await providerConfig.resetOnboarding();
-        sidebar.sendMessage({
-          type: "authState",
-          signedIn: await auth.isSignedIn(),
-          onboardingComplete: false,
-        });
-        void vscode.window.showInformationMessage(
-          "ReviewStack onboarding reset. Re-open the sidebar if needed.",
+        await store.ensureInitialized();
+        await vscode.commands.executeCommand(
+          "revealFileInOS",
+          vscode.Uri.file(store.rootDir),
         );
       },
     ),
-    vscode.commands.registerCommand("reviewstack.dismissLens", () => undefined),
   ];
-}
-
-async function openSecondarySidebar(): Promise<void> {
-  await vscode.commands.executeCommand(
-    "workbench.view.extension.reviewstackContainer",
-  );
-  await new Promise((resolve) => setTimeout(resolve, 80));
-  await vscode.commands.executeCommand("workbench.action.focusAuxiliaryBar");
 }

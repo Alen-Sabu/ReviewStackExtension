@@ -15,77 +15,32 @@
   "main": "./dist/extension.js",
   "contributes": {
     "viewsContainers": {
-      "secondarySidebar": [
+      "activitybar": [
         {
-          "id": "reviewstackContainer",
+          "id": "reviewstack",
           "title": "ReviewStack",
           "icon": "media/icon.svg"
         }
       ]
     },
     "views": {
-      "reviewstackContainer": [
+      "reviewstack": [
         {
-          "id": "reviewstackView",
-          "name": "ReviewStack",
-          "type": "webview",
-          "icon": "media/icon.svg",
-          "retainContextWhenHidden": true
+          "id": "reviewstack.commitHistory",
+          "name": "Commit History"
         }
       ]
     },
     "commands": [
       {
-        "command": "myChat.open",
-        "title": "Review Chat",
-        "icon": {
-          "dark": "media/icon.svg",
-          "light": "media/icon.svg"
-        }
+        "command": "reviewstack.reviewLastCommit",
+        "title": "ReviewStack: Review Last Commit"
       },
       {
-        "command": "reviewstack.reviewFunction",
-        "title": "ReviewStack: Review"
-      },
-      {
-        "command": "reviewstack.dismissLens",
-        "title": "ReviewStack: Dismiss"
-      },
-      {
-        "command": "reviewstack.signIn",
-        "title": "ReviewStack: Sign In"
-      },
-      {
-        "command": "reviewstack.signOut",
-        "title": "ReviewStack: Sign Out"
-      },
-      {
-        "command": "reviewstack.resetOnboarding",
-        "title": "ReviewStack: Reset Onboarding"
+        "command": "reviewstack.openReviewsFolder",
+        "title": "ReviewStack: Open Reviews Folder"
       }
-    ],
-    "menus": {
-      "editor/title": [
-        {
-          "command": "myChat.open",
-          "group": "navigation"
-        }
-      ],
-      "view/title": [],
-      "commandPalette": [
-        {
-          "command": "myChat.open"
-        },
-        {
-          "command": "reviewstack.reviewFunction",
-          "when": "false"
-        },
-        {
-          "command": "reviewstack.dismissLens",
-          "when": "false"
-        }
-      ]
-    }
+    ]
   },
   "scripts": {
     "vscode:prepublish": "npm run package",
