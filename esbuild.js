@@ -61,24 +61,11 @@ async function main() {
     plugins: sharedPlugins,
   });
 
-  const webviewCtx = await esbuild.context({
-    entryPoints: ["src/webview/app.ts"],
-    bundle: true,
-    format: "iife",
-    minify: production,
-    sourcemap: !production,
-    platform: "browser",
-    outfile: "dist/media/webview.js",
-    logLevel: "silent",
-    plugins: sharedPlugins,
-  });
-
   if (watch) {
-    await Promise.all([extensionCtx.watch(), webviewCtx.watch()]);
+    await extensionCtx.watch();
   } else {
-    await Promise.all([extensionCtx.rebuild(), webviewCtx.rebuild()]);
+    await extensionCtx.rebuild();
     await extensionCtx.dispose();
-    await webviewCtx.dispose();
   }
 }
 

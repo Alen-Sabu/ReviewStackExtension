@@ -15,73 +15,68 @@
   "main": "./dist/extension.js",
   "contributes": {
     "viewsContainers": {
-      "secondarySidebar": [
+      "activitybar": [
         {
-          "id": "reviewstackContainer",
+          "id": "reviewstack",
           "title": "ReviewStack",
           "icon": "media/icon.svg"
         }
       ]
     },
+    "viewsWelcome": [
+      {
+        "view": "reviewstack.commitHistory",
+        "contents": "ReviewStack keeps an AI review history for every commit — like migrations for code quality.\n\n[Review Last Commit](command:reviewstack.reviewLastCommit)\n\n[Open Reviews Folder](command:reviewstack.openReviewsFolder)\n\nTip: Reviews are stored in `.reviewstack/commits/` in this project."
+      }
+    ], 
     "views": {
-      "reviewstackContainer": [
+      "reviewstack": [
         {
-          "id": "reviewstackView",
-          "name": "ReviewStack",
-          "type": "webview",
-          "icon": "media/icon.svg",
-          "retainContextWhenHidden": true
+          "id": "reviewstack.commitHistory",
+          "name": "Commit History"
         }
       ]
     },
     "commands": [
       {
-        "command": "myChat.open",
-        "title": "Review Chat",
-        "icon": {
-          "dark": "media/icon.svg",
-          "light": "media/icon.svg"
-        }
+        "command": "reviewstack.reviewLastCommit",
+        "title": "ReviewStack: Review Last Commit",
+        "icon": "$(sparkle)"
       },
       {
-        "command": "reviewstack.reviewFunction",
-        "title": "ReviewStack: Review"
+        "command": "reviewstack.openReviewsFolder",
+        "title": "ReviewStack: Open Reviews Folder",
+        "icon": "$(folder-opened)"
+      }, 
+      {
+        "command": "reviewstack.openReview",
+        "title": "ReviewStack: Open Review"
       },
       {
-        "command": "reviewstack.dismissLens",
-        "title": "ReviewStack: Dismiss"
+        "command": "reviewstack.enable",
+        "title": "ReviewStack: Enable"
       },
       {
-        "command": "reviewstack.signIn",
-        "title": "ReviewStack: Sign In"
-      },
-      {
-        "command": "reviewstack.signOut",
-        "title": "ReviewStack: Sign Out"
-      },
-      {
-        "command": "reviewstack.resetOnboarding",
-        "title": "ReviewStack: Reset Onboarding"
+        "command": "reviewstack.disable",
+        "title": "ReviewStack: Disable"
       }
-    ],
+    ], 
     "menus": {
-      "editor/title": [
+      "view/title": [
         {
-          "command": "myChat.open",
-          "group": "navigation"
+          "command": "reviewstack.reviewLastCommit",
+          "when": "view == reviewstack.commitHistory",
+          "group": "navigation@1"
+        },
+        {
+          "command": "reviewstack.openReviewsFolder",
+          "when": "view == reviewstack.commitHistory",
+          "group": "navigation@2"
         }
       ],
-      "view/title": [],
       "commandPalette": [
         {
-          "command": "myChat.open"
-        },
-        {
-          "command": "reviewstack.reviewFunction",
-          "when": "false"
-        },
-        {
-          "command": "reviewstack.dismissLens",
+          "command": "reviewstack.openReview",
           "when": "false"
         }
       ]
