@@ -66,6 +66,12 @@ export class ReviewStore {
         ); 
     }
 
+    async setEnabled(enabled: boolean): Promise<void> {
+        const config = await this.getConfig();
+        config.enabled = enabled;
+        await this.writeJson(path.join(this.rootDir, "config.json"), config);
+    }
+
     async getIndex(): Promise<ReviewIndex> {
         await this.ensureInitialized(); 
         return this.readJson(

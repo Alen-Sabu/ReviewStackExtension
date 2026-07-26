@@ -5,10 +5,18 @@ import { CommitDiff, CommitInfo } from "./types";
 const execFileAsync = promisify(execFile);
 
 export class DiffService {
+    private maxDiffBytes: number;
+
     constructor(
-        private readonly workspaceRoot: string, 
-        private readonly maxDiffBytes = 200_000, 
-    ){}
+        private readonly workspaceRoot: string,
+        maxDiffBytes = 200_000,
+    ) {
+        this.maxDiffBytes = maxDiffBytes;
+    }
+
+    setMaxDiffBytes(maxDiffBytes: number): void {
+        this.maxDiffBytes = maxDiffBytes;
+    }
 
     private async git(args: string[]): Promise<string> {
         const { stdout } = await execFileAsync("git", args, {
@@ -48,6 +56,16 @@ export class DiffService {
             author: author, 
             date: date ?? new Date().toISOString(), 
             message: messageParts.join("\n") || "No message", 
+        }
+    }
+
+    /** True only for `git commit` / `git commit --amend`, not checkout/merge/rebase/etc. */
+    async wasLastReflogACommit(): Promise<boolean> {
+        try {
+            const subject = await this.git(["reflog", "-1", "--pretty=%gs"]);
+            return /^(commit|commit \(amend\)):/.test(subject);
+        } catch {
+            return false;
         }
     }
 

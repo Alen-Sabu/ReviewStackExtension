@@ -23,6 +23,12 @@
         }
       ]
     },
+    "viewsWelcome": [
+      {
+        "view": "reviewstack.commitHistory",
+        "contents": "ReviewStack keeps an AI review history for every commit — like migrations for code quality.\n\n[Review Last Commit](command:reviewstack.reviewLastCommit)\n\n[Open Reviews Folder](command:reviewstack.openReviewsFolder)\n\nTip: Reviews are stored in `.reviewstack/commits/` in this project."
+      }
+    ], 
     "views": {
       "reviewstack": [
         {
@@ -34,13 +40,47 @@
     "commands": [
       {
         "command": "reviewstack.reviewLastCommit",
-        "title": "ReviewStack: Review Last Commit"
+        "title": "ReviewStack: Review Last Commit",
+        "icon": "$(sparkle)"
       },
       {
         "command": "reviewstack.openReviewsFolder",
-        "title": "ReviewStack: Open Reviews Folder"
+        "title": "ReviewStack: Open Reviews Folder",
+        "icon": "$(folder-opened)"
+      }, 
+      {
+        "command": "reviewstack.openReview",
+        "title": "ReviewStack: Open Review"
+      },
+      {
+        "command": "reviewstack.enable",
+        "title": "ReviewStack: Enable"
+      },
+      {
+        "command": "reviewstack.disable",
+        "title": "ReviewStack: Disable"
       }
-    ]
+    ], 
+    "menus": {
+      "view/title": [
+        {
+          "command": "reviewstack.reviewLastCommit",
+          "when": "view == reviewstack.commitHistory",
+          "group": "navigation@1"
+        },
+        {
+          "command": "reviewstack.openReviewsFolder",
+          "when": "view == reviewstack.commitHistory",
+          "group": "navigation@2"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "reviewstack.openReview",
+          "when": "false"
+        }
+      ]
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run package",
