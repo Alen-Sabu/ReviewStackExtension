@@ -1,69 +1,55 @@
 # ReviewStack
 
-**Automatic AI code reviews for every git commit** — stored as searchable project history, not a chat you forget.
-
-ReviewStack watches your repo (while VS Code is open). When you run `git commit`, it reviews the **commit diff only**, then saves a markdown review under `.reviewstack/commits/<hash>/`.
+Automatic AI code reviews for every git commit — saved as searchable project history under `.reviewstack/`.
 
 ```text
 git commit -m "Add payment API"
         ↓
-ReviewStack (AI via VS Code Language Model API)
+AI reviews the commit diff
         ↓
-.reviewstack/commits/a1b2c3d/review.md
+.reviewstack/commits/<hash>/review.md
         ↓
 Sidebar → Commit History
 ```
 
 ## Features
 
-- **Auto-review on commit** — only real `git commit` / amend (not branch switch, checkout, merge, rebase)
-- **Manual review** — Command Palette → **ReviewStack: Review Last Commit**
-- **Commit History sidebar** — status icons, relative dates, open any past review
-- **On-disk history** — `review.md` + `metadata.json` + `index.json` (migration-style artifact)
-- **Enable / Disable** — toggle without uninstalling
+- **Auto-review on commit** — runs after `git commit` while VS Code is open
+- **Commit History sidebar** — browse past reviews with status icons
+- **On-disk history** — each review is a markdown file you can open anytime
+- **Diff-only reviews** — sends the commit changes, not your whole repository
+- **Enable / Disable** — turn automatic reviews on or off without uninstalling
+
+Branch switches, checkouts, merges, and rebases do **not** trigger auto-review.
 
 ## Requirements
 
-- VS Code **1.90+** (or a compatible editor that supports the Language Model API)
-- A **Language Model** provider, typically **[GitHub Copilot Chat](https://marketplace.visualstudio.com/items?itemName=GitHub.copilot-chat)** signed in
-- A **git repository** folder open in the workspace
+- VS Code 1.90 or later (or a compatible editor with the Language Model API)
+- A **Language Model** provider, typically [GitHub Copilot Chat](https://marketplace.visualstudio.com/items?itemName=GitHub.copilot-chat), signed in
+- A **git repository** folder open as your workspace
 
-> ReviewStack does **not** host its own AI backend. Reviews use the model available in your editor (e.g. Copilot). Diff content is sent to that model.
+## Getting started
 
-## Install
-
-### From VSIX (local / testing)
-
-1. Build the package (see [Development](#development)).
-2. In VS Code: **Extensions** → `…` → **Install from VSIX…**
-3. Choose the generated `reviewstack-*.vsix` file.
-4. Reload the window.
-
-### From Marketplace (when published)
-
-Search for **ReviewStack** in the Extensions view, or install from the Marketplace listing.
-
-## Quick start
-
-1. Open a git repo folder in VS Code.
-2. Ensure Copilot Chat (or another LM provider) works in that window.
-3. Click the **ReviewStack** icon in the Activity Bar.
-4. Either:
-   - Make a commit (`git commit -m "…"`), or
-   - Run **ReviewStack: Review Last Commit**
-5. Allow Language Model access if prompted.
-6. Open the new review from **Commit History** or `.reviewstack/commits/`.
+1. Install **ReviewStack** from the Extensions view.
+2. Open a git repo folder in VS Code.
+3. Make sure Copilot Chat (or another LM provider) works in that window.
+4. Click the **ReviewStack** icon in the Activity Bar.
+5. Either:
+   - Commit your changes (`git commit -m "…"`), or
+   - Run **ReviewStack: Review Last Commit** from the Command Palette
+6. Allow Language Model access if prompted.
+7. Open the review from **Commit History**, or from `.reviewstack/commits/<hash>/review.md`.
 
 ## Commands
 
 | Command | Description |
 |---|---|
-| `ReviewStack: Review Last Commit` | Review `HEAD` now |
-| `ReviewStack: Open Reviews Folder` | Reveal `.reviewstack` on disk |
-| `ReviewStack: Enable` | Turn reviews on (`config.json`) |
-| `ReviewStack: Disable` | Turn reviews off |
+| **ReviewStack: Review Last Commit** | Review the current `HEAD` commit now |
+| **ReviewStack: Open Reviews Folder** | Reveal the `.reviewstack` folder on disk |
+| **ReviewStack: Enable** | Turn reviews on |
+| **ReviewStack: Disable** | Turn reviews off |
 
-## Storage layout
+## Where reviews are stored
 
 ```text
 .reviewstack/
@@ -75,7 +61,7 @@ Search for **ReviewStack** in the Extensions view, or install from the Marketpla
       review.md
 ```
 
-### `config.json`
+### Settings (`.reviewstack/config.json`)
 
 ```json
 {
@@ -85,87 +71,26 @@ Search for **ReviewStack** in the Extensions view, or install from the Marketpla
 }
 ```
 
-| Field | Meaning |
+| Setting | Meaning |
 |---|---|
 | `enabled` | Master switch for reviews |
-| `autoOpenReview` | Open `review.md` after an auto-review |
-| `maxDiffBytes` | Truncate large diffs before sending to the model |
+| `autoOpenReview` | Automatically open `review.md` after an auto-review |
+| `maxDiffBytes` | Max diff size sent to the model (larger diffs are truncated) |
 
-### Privacy
+## Privacy
 
-- Only the **commit diff** (plus commit metadata) is sent to the Language Model — not the whole repository.
-- Reviews are written **locally** under `.reviewstack/`. Commit or gitignore that folder based on your team policy.
-- Branch switches and checkouts do **not** trigger auto-review.
-
-## Development
-
-```bash
-git clone https://github.com/Alen-Sabu/ReviewStackExtension.git
-cd ReviewStackExtension
-npm install
-npm run compile
-```
-
-Press **F5** to launch the Extension Development Host.
-
-Useful scripts:
-
-| Script | Purpose |
-|---|---|
-| `npm run watch` | Rebuild on change |
-| `npm run compile` | Typecheck + lint + bundle |
-| `npm run vsix` | Create a `.vsix` for local install |
-| `npm run publish:marketplace` | Publish (requires publisher login) |
-
-## Publish to the VS Code Marketplace
-
-### 1. Create a publisher
-
-1. Open [Visual Studio Marketplace Publisher Management](https://marketplace.visualstudio.com/manage).
-2. Sign in with the Microsoft account you want to own the extension.
-3. Create a publisher whose **ID** matches `publisher` in `package.json` (currently `reviewstack`).
-4. Keep that ID — changing it later requires republishing under a new name.
-
-### 2. Create an Azure DevOps Personal Access Token (PAT)
-
-1. Go to [Azure DevOps](https://dev.azure.com/) → User settings → **Personal access tokens**.
-2. Create a token with **Marketplace → Manage** scope (or Custom → Marketplace).
-3. Copy the token (shown once).
-
-### 3. Login and publish
-
-```bash
-npm install
-npm run compile
-npx vsce login reviewstack
-# paste PAT when prompted
-
-npm run vsix
-# optional: install the .vsix locally and smoke-test
-
-npm run publish:marketplace
-# or: npx vsce publish
-```
-
-Bump `version` in `package.json` before each release (`0.1.0` → `0.1.1`, etc.).
-
-### 4. Optional: Open VSX (Cursor / other editors)
-
-```bash
-npx ovsx publish reviewstack-*.vsix -p <OPEN_VSX_TOKEN>
-```
-
-Create a token at [open-vsx.org](https://open-vsx.org/).
+- Only the **commit diff** and commit metadata (message, author, hash) are sent to the Language Model — not your entire repo.
+- Review files are written **locally** under `.reviewstack/`. Commit or gitignore that folder based on your team’s preference.
 
 ## Troubleshooting
 
-| Issue | What to try |
+| Problem | What to try |
 |---|---|
-| No language model available | Install/enable Copilot Chat; sign in; try Chat once in that window |
-| Auto-review did nothing | Window must be open; action must be `git commit` (not checkout); check `enabled` in config |
-| Could not open review.md | Row may be pending/failed — only completed reviews open; wait for AI to finish |
-| Extension not activating | Open a **folder** workspace (not a single file) |
+| “No language model available” | Install/enable GitHub Copilot Chat, sign in, and send a message in Chat once |
+| Auto-review did nothing | Keep VS Code open; use `git commit` (not checkout); check `enabled` in `config.json` |
+| Can’t open a review | Wait until status is completed; pending/failed items have no `review.md` yet |
+| Extension doesn’t seem active | Open a **folder** workspace (not a single file) |
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT
