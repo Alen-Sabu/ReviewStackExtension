@@ -1,14 +1,41 @@
 {
   "name": "reviewstack",
   "displayName": "ReviewStack",
-  "description": "AI-powered repository-aware code review and architecture assistant for VS Code. ",
-  "version": "0.0.1",
+  "description": "Automatic AI code reviews for every git commit — stored as searchable project history under .reviewstack/",
+  "version": "0.1.0",
+  "publisher": "reviewstack",
+  "license": "MIT",
+  "homepage": "https://github.com/Alen-Sabu/ReviewStackExtension",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Alen-Sabu/ReviewStackExtension.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Alen-Sabu/ReviewStackExtension/issues"
+  },
+  "qna": "marketplace",
   "engines": {
-    "vscode": "^1.119.0"
+    "vscode": "^1.90.0"
   },
   "categories": [
+    "SCM Providers",
     "Other"
   ],
+  "keywords": [
+    "git",
+    "commit",
+    "code review",
+    "ai",
+    "copilot",
+    "security",
+    "diff",
+    "review history"
+  ],
+  "galleryBanner": {
+    "color": "#0f2040",
+    "theme": "dark"
+  },
+  "icon": "media/icon.png",
   "activationEvents": [
     "onStartupFinished"
   ],
@@ -26,9 +53,9 @@
     "viewsWelcome": [
       {
         "view": "reviewstack.commitHistory",
-        "contents": "ReviewStack keeps an AI review history for every commit — like migrations for code quality.\n\n[Review Last Commit](command:reviewstack.reviewLastCommit)\n\n[Open Reviews Folder](command:reviewstack.openReviewsFolder)\n\nTip: Reviews are stored in `.reviewstack/commits/` in this project."
+        "contents": "ReviewStack keeps an AI review history for every commit — like migrations for code quality.\n\n[Review Last Commit](command:reviewstack.reviewLastCommit)\n\n[Open Reviews Folder](command:reviewstack.openReviewsFolder)\n\nTip: Reviews are stored in `.reviewstack/commits/` in this project.\n\nRequires a Language Model provider (e.g. GitHub Copilot Chat)."
       }
-    ], 
+    ],
     "views": {
       "reviewstack": [
         {
@@ -47,7 +74,7 @@
         "command": "reviewstack.openReviewsFolder",
         "title": "ReviewStack: Open Reviews Folder",
         "icon": "$(folder-opened)"
-      }, 
+      },
       {
         "command": "reviewstack.openReview",
         "title": "ReviewStack: Open Review"
@@ -60,7 +87,7 @@
         "command": "reviewstack.disable",
         "title": "ReviewStack: Disable"
       }
-    ], 
+    ],
     "menus": {
       "view/title": [
         {
@@ -89,6 +116,8 @@
     "watch:esbuild": "node esbuild.js --watch",
     "watch:tsc": "tsc --noEmit --watch --project tsconfig.json",
     "package": "npm run check-types && npm run lint && node esbuild.js --production",
+    "vsix": "vsce package",
+    "publish:marketplace": "vsce publish",
     "compile-tests": "tsc -p . --outDir out",
     "watch-tests": "tsc -p . -w --outDir out",
     "pretest": "npm run compile-tests && npm run compile && npm run lint",
@@ -97,19 +126,16 @@
     "test": "vscode-test"
   },
   "devDependencies": {
-    "@types/marked": "^5.0.2",
     "@types/mocha": "^10.0.10",
     "@types/node": "^22.19.18",
-    "@types/vscode": "^1.118.0",
+    "@types/vscode": "^1.90.0",
     "@vscode/test-cli": "^0.0.12",
     "@vscode/test-electron": "^2.5.2",
+    "@vscode/vsce": "^3.2.0",
     "esbuild": "^0.27.3",
     "eslint": "^9.39.3",
     "npm-run-all": "^4.1.5",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.56.1"
-  },
-  "dependencies": {
-    "marked": "^18.0.5"
   }
 }

@@ -7,8 +7,12 @@ src/**
 .yarnrc
 esbuild.js
 vsc-extension-quickstart.md
+learn.md
 **/tsconfig.json
 **/eslint.config.mjs
 **/*.map
 **/*.ts
 **/.vscode-test.*
+**/*.vsix
+media/index.html
+media/style.css
